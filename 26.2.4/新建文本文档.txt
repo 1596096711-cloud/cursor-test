@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声音交互烟花</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #0a0a2a;
+            color: #fff;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        header {
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ff3366, #33ccff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 15px rgba(255, 51, 102, 0.5);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: #a0a0ff;
+            margin-bottom: 20px;
+        }
+        
+        .instructions {
+            background-color: rgba(20, 20, 60, 0.7);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid #3366ff;
+            box-shadow: 0 0 20px rgba(51, 102, 255, 0.3);
+        }
+        
+        .instructions h2 {
+            color: #33ccff;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        
+        .instructions p {
+            margin-bottom: 10px;
+            line-height: 1.5;
+            color: #ccccff;
+        }
+        
+        .audio-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        button {
+            background: linear-gradient(90deg, #ff3366, #3366ff);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            letter-spacing: 1px;
+            box-shadow: 0 5px 15px rgba(255, 51, 102, 0.4);
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(255, 51, 102, 0.6);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .volume-display {
+            background-color: rgba(20, 20, 60, 0.7);
+            padding: 10px 20px;
+            border-radius: 50px;
+            width: 300px;
+            border: 1px solid #33ccff;
+        }
+        
+        .volume-bar {
+            height: 10px;
+            background: linear-gradient(90deg, #33ccff, #ff3366);
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+        
+        .freq-display {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.9rem;
+            color: #a0a0ff;
+        }
+        
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(51, 102, 255, 0.5);
+            border: 2px solid #3366ff;
+            margin-bottom: 30px;
+        }
+        
+        #p5-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+            background-color: rgba(20, 20, 60, 0.7);
+            padding: 15px;
+            border-radius: 15px;
+            border: 1px solid #3366ff;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        footer {
+            margin-top: 20px;
+            color: #8888cc;
+            font-size: 0.9rem;
+            text-align: center;
+            padding: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .canvas-container {
+                height: 400px;
+            }
+            
+            .instructions {
+                padding: 15px;
+            }
+            
+            .legend {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>声音交互烟花</h1>
+            <p class="subtitle">发出声音，观看根据您声音特性生成的烟花</p>
+        </header>
+        
+        <div class="instructions">
+            <h2>使用说明</h2>
+            <p>1. 点击"启用麦克风"按钮允许访问您的麦克风</p>
+            <p>2. 发出声音（说话、唱歌或播放音乐）</p>
+            <p>3. 观察根据您声音频率和音量生成的烟花效果</p>
+            <p>4. 声音频率影响烟花颜色，音量影响烟花数量和密度</p>
+        </div>
+        
+        <div class="audio-controls">
+            <button id="mic-button">启用麦克风</button>
+            <div class="volume-display">
+                <div class="volume-bar" id="volume-bar"></div>
+                <div class="freq-display">
+                    <span>低频</span>
+                    <span id="frequency-display">频率: -- Hz</span>
+                    <span>高频</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <div id="p5-canvas"></div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ff3366;"></div>
+                <span>低频声音 (红色系)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #33ccff;"></div>
+                <span>中频声音 (蓝色系)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ffff33;"></div>
+                <span>高频声音 (黄色系)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: linear-gradient(90deg, #ff3366, #33ccff, #ffff33);"></div>
+                <span>音量越大，烟花越多越密集</span>
+            </div>
+        </div>
+        
+        <footer>
+            <p>使用 p5.js 和 p5.sound 库创建 | 声音频率和音量实时控制烟花效果</p>
+        </footer>
+    </div>
+
+    <script>
+        let mic;
+        let fft;
+        let isMicEnabled = false;
+        let fireworks = [];
+        let particles = [];
+        let micButton;
+        let volumeBar;
+        let frequencyDisplay;
+        
+        // 音频分析参数
+        let bassThreshold = 100;
+        let volumeHistory = [];
+        const historyLength = 10;
+        
+        function setup() {
+            const canvas = createCanvas(windowWidth * 0.9, 500);
+            canvas.parent('p5-canvas');
+            
+            // 初始化FFT分析器
+            fft = new p5.FFT();
+            fft.setInput(mic);
+            
+            // 初始化UI元素
+            micButton = select('#mic-button');
+            volumeBar = select('#volume-bar');
+            frequencyDisplay = select('#frequency-display');
+            
+            // 设置按钮点击事件
+            micButton.mousePressed(toggleMicrophone);
+            
+            colorMode(HSB, 360, 100, 100, 100);
+            noStroke();
+        }
+        
+        function draw() {
+            // 创建深色渐变背景
+            drawBackground();
+            
+            if (isMicEnabled && mic) {
+                // 分析音频
+                let spectrum = fft.analyze();
+                let volume = fft.getEnergy(20, 20000) / 255; // 获取整体音量
+                let bass = fft.getEnergy(20, 250); // 低频
+                let mid = fft.getEnergy(250, 2000); // 中频
+                let treble = fft.getEnergy(2000, 20000); // 高频
+                
+                // 计算平均频率
+                let avgFreq = calculateAverageFrequency(spectrum);
+                
+                // 更新UI显示
+                updateAudioDisplay(volume, avgFreq);
+                
+                // 根据音量决定是否生成新烟花
+                if (volume > 0.1) {
+                    // 音量越大，烟花越多
+                    let fireworkCount = map(volume, 0.1, 1, 1, 5);
+                    
+                    for (let i = 0; i < fireworkCount; i++) {
+                        // 随机延迟生成烟花，使效果更自然
+                        if (frameCount % Math.floor(map(volume, 0.1, 1, 30, 5)) === 0) {
+                            createFirework(avgFreq, volume, bass, mid, treble);
+                        }
+                    }
+                }
+            }
+            
+            // 更新和显示所有烟花
+            updateFireworks();
+            updateParticles();
+        }
+        
+        function drawBackground() {
+            // 创建星空背景
+            for (let i = 0; i < 100; i++) {
+                let x = random(width);
+                let y = random(height);
+                let size = random(0.5, 2);
+                fill(255, 255, 255, random(50, 100));
+                ellipse(x, y, size, size);
+            }
+            
+            // 添加深色渐变覆盖层
+            let gradient = drawingContext.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, 'rgba(10, 10, 40, 0.8)');
+            gradient.addColorStop(1, 'rgba(5, 5, 20, 0.9)');
+            drawingContext.fillStyle = gradient;
+            drawingContext.fillRect(0, 0, width, height);
+        }
+        
+        function calculateAverageFrequency(spectrum) {
+            let total = 0;
+            let sum = 0;
+            
+            for (let i = 0; i < spectrum.length; i++) {
+                total += spectrum[i];
+                sum += spectrum[i] * i;
+            }
+            
+            return total > 0 ? sum / total : 0;
+        }
+        
+        function createFirework(avgFreq, volume, bass, mid, treble) {
+            // 根据频率确定烟花颜色
+            let hue;
+            if (avgFreq < 50) {
+                // 低频 - 红色系
+                hue = map(avgFreq, 0, 50, 0, 30);
+            } else if (avgFreq < 100) {
+                // 中频 - 蓝色系
+                hue = map(avgFreq, 50, 100, 200, 240);
+            } else {
+                // 高频 - 黄色系
+                hue = map(avgFreq, 100, 255, 50, 70);
+            }
+            
+            // 根据音量确定烟花大小和粒子数量
+            let fireworkSize = map(volume, 0.1, 1, 3, 8);
+            let particleCount = map(volume, 0.1, 1, 50, 300);
+            
+            // 在底部随机位置生成烟花
+            let x = random(width * 0.1, width * 0.9);
+            
+            fireworks.push({
+                x: x,
+                y: height,
+                targetY: random(height * 0.2, height * 0.6),
+                size: fireworkSize,
+                hue: hue,
+                saturation: map(mid, 0, 255, 60, 100),
+                brightness: map(treble, 0, 255, 80, 100),
+                speed: random(5, 10),
+                particleCount: particleCount,
+                exploded: false,
+                particles: []
+            });
+        }
+        
+        function updateFireworks() {
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                let f = fireworks[i];
+                
+                if (!f.exploded) {
+                    // 烟花上升
+                    f.y -= f.speed;
+                    
+                    // 绘制上升轨迹
+                    fill(f.hue, f.saturation, f.brightness, 70);
+                    ellipse(f.x, f.y, f.size, f.size);
+                    
+                    // 添加拖尾效果
+                    for (let j = 0; j < 3; j++) {
+                        let trailY = f.y + random(5, 15);
+                        let trailSize = random(f.size * 0.5, f.size * 0.8);
+                        fill(f.hue, f.saturation, f.brightness, 30);
+                        ellipse(f.x, trailY, trailSize, trailSize);
+                    }
+                    
+                    // 检查是否到达目标高度或超出屏幕
+                    if (f.y <= f.targetY || f.y < 0) {
+                        explodeFirework(f);
+                        fireworks.splice(i, 1);
+                    }
+                }
+            }
+        }
+        
+        function explodeFirework(firework) {
+            // 创建爆炸粒子
+            for (let i = 0; i < firework.particleCount; i++) {
+                let angle = random(TWO_PI);
+                let speed = random(1, 5) * map(firework.particleCount, 50, 300, 0.5, 2);
+                
+                particles.push({
+                    x: firework.x,
+                    y: firework.y,
+                    vx: cos(angle) * speed,
+                    vy: sin(angle) * speed,
+                    life: 100,
+                    maxLife: 100,
+                    hue: firework.hue + random(-20, 20),
+                    saturation: firework.saturation,
+                    brightness: firework.brightness,
+                    size: random(2, 6)
+                });
+            }
+        }
+        
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                
+                // 更新位置
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                // 添加重力效果
+                p.vy += 0.05;
+                
+                // 减少生命值
+                p.life -= 1;
+                
+                // 计算透明度和大小
+                let alpha = map(p.life, 0, p.maxLife, 0, 100);
+                let currentSize = map(p.life, 0, p.maxLife, 0, p.size);
+                
+                // 绘制粒子
+                fill(p.hue % 360, p.saturation, p.brightness, alpha);
+                ellipse(p.x, p.y, currentSize, currentSize);
+                
+                // 移除死亡粒子
+                if (p.life <= 0 || p.y > height || p.x < 0 || p.x > width) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        function updateAudioDisplay(volume, avgFreq) {
+            // 更新音量条
+            let volumePercent = volume * 100;
+            volumeBar.style('width', volumePercent + '%');
+            
+            // 更新频率显示
+            let freqValue = map(avgFreq, 0, 255, 0, 20000);
+            frequencyDisplay.html(`频率: ${Math.round(freqValue)} Hz`);
+            
+            // 根据音量改变音量条颜色
+            if (volume < 0.3) {
+                volumeBar.style('background', 'linear-gradient(90deg, #33ccff, #33ccff)');
+            } else if (volume < 0.6) {
+                volumeBar.style('background', 'linear-gradient(90deg, #33ccff, #ff9933)');
+            } else {
+                volumeBar.style('background', 'linear-gradient(90deg, #33ccff, #ff3366)');
+            }
+        }
+        
+        function toggleMicrophone() {
+            if (!isMicEnabled) {
+                // 启用麦克风
+                mic = new p5.AudioIn();
+                mic.start(() => {
+                    isMicEnabled = true;
+                    micButton.html('麦克风已启用');
+                    micButton.style('background', 'linear-gradient(90deg, #33cc66, #33ccff)');
+                    
+                    // 将麦克风输入连接到FFT
+                    fft.setInput(mic);
+                }, (err) => {
+                    console.error('麦克风访问错误:', err);
+                    alert('无法访问麦克风。请确保已授予麦克风权限。');
+                });
+            } else {
+                // 禁用麦克风
+                if (mic) {
+                    mic.stop();
+                }
+                isMicEnabled = false;
+                micButton.html('启用麦克风');
+                micButton.style('background', 'linear-gradient(90deg, #ff3366, #3366ff)');
+                
+                // 清空音量显示
+                volumeBar.style('width', '0%');
+                frequencyDisplay.html('频率: -- Hz');
+            }
+        }
+        
+        function windowResized() {
+            resizeCanvas(windowWidth * 0.9, 500);
+        }
+    </script>
+</body>
+</html>

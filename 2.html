@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Constellation Generator</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #fff;
+      background: linear-gradient(to bottom, #000022, #000044);
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 15px;
+      border-radius: 8px;
+      width: 250px;
+      z-index: 10;
+    }
+
+    #controls button {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      padding: 8px;
+      background: #4a90e2;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    #controls button:hover {
+      background: #357abd;
+    }
+
+    #controls select, #controls input {
+      width: 100%;
+      margin: 8px 0;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      border-radius: 4px;
+    }
+
+    #visualization {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 10px;
+      border-radius: 8px;
+      z-index: 10;
+    }
+
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 15px;
+      border-radius: 8px;
+      width: 300px;
+      z-index: 10;
+    }
+
+    #gallery {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 10px;
+      border-radius: 8px;
+      z-index: 10;
+      display: none;
+    }
+
+    #gallery img {
+      width: 50px;
+      height: 50px;
+      margin: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="controls">
+    <button id="startBtn">开始探索 (Start)</button>
+    <button id="stopBtn" disabled>停止 (Stop)</button>
+    <button id="clearBtn">清除 (Clear)</button>
+    <button id="saveBtn">保存星座 (Save)</button>
+    <select id="modeSelect">
+      <option value="free">自由模式 (Free)</option>
+      <option value="guided">引导模式 (Guided)</option>
+    </select>
+    <label>灵敏度 (Sensitivity): <input type="range" id="threshold" min="0" max="100" value="20"></label>
+  </div>
+
+  <div id="visualization">
+    <p>音量 (Volume): <span id="volume">0</span></p>
+    <p>主要频率 (Frequency): <span id="frequency">0</span> Hz</p>
+    <p>星星数量 (Stars): <span id="starCount">0</span></p>
+    <p>发声时长 (Duration): <span id="duration">0</span> s</p>
+  </div>
+
+  <div id="info">
+    <h2>使用说明 (Instructions)</h2>
+    <p>1. 点击"开始探索"授权麦克风。</p>
+    <p>2. 说话、唱歌或发出声音来生成星座。</p>
+    <p>3. 声音越大，星星越大；频率决定颜色和位置。</p>
+    <p>4. 生成3颗星星后自动连线成星座。</p>
+    <p>5. 可保存和查看历史星座。</p>
+  </div>
+
+  <div id="gallery">
+    <h3>历史星座 (History)</h3>
+    <!-- Thumbnails will be added here -->
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Background stars
+    const bgStars = [];
+    for (let i = 0; i < 500; i++) {
+      bgStars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 2 + 1,
+        alpha: Math.random() * 0.5 + 0.5,
+        speed: Math.random() * 0.05 + 0.01
+      });
+    }
+
+    // Meteors
+    const meteors = [];
+
+    function createMeteor() {
+      meteors.push({
+        x: Math.random() * width,
+        y: 0,
+        length: Math.random() * 50 + 20,
+        speed: Math.random() * 5 + 2,
+        angle: Math.random() * Math.PI / 4 + Math.PI / 6
+      });
+    }
+    setInterval(createMeteor, 5000);
+
+    // Nebula effect (simple gradient blobs)
+    const nebulae = [];
+    for (let i = 0; i < 3; i++) {
+      nebulae.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: Math.random() * 200 + 100,
+        color: `rgba(${Math.floor(Math.random()*100 + 155)}, ${Math.floor(Math.random()*100 + 155)}, 255, 0.05)`
+      });
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = 'rgba(0, 0, 34, 0.1)';
+      ctx.fillRect(0, 0, width, height);
+
+      // Nebulae
+      nebulae.forEach(n => {
+        const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius);
+        grad.addColorStop(0, n.color);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Stars
+      bgStars.forEach(star => {
+        star.alpha += star.speed * (Math.random() > 0.5 ? 1 : -1);
+        star.alpha = Math.max(0.2, Math.min(1, star.alpha));
+        ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Meteors
+      meteors.forEach((m, i) => {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(m.x, m.y);
+        ctx.lineTo(m.x + Math.cos(m.angle) * m.length, m.y + Math.sin(m.angle) * m.length);
+        ctx.stroke();
+        m.x += Math.cos(m.angle) * m.speed;
+        m.y += Math.sin(m.angle) * m.speed;
+        if (m.y > height || m.x > width) meteors.splice(i, 1);
+      });
+    }
+
+    // Constellation stars
+    let stars = [];
+    let lines = [];
+    let time = 0;
+    let voiceDuration = 0;
+
+    class Star {
+      constructor(x, y, size, color, brightness) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.color = color;
+        this.brightness = brightness;
+        this.animTime = 0;
+      }
+
+      draw() {
+        this.animTime += 0.05;
+        const scale = 1 + Math.sin(this.animTime) * 0.2;
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.brightness;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Simple connection: connect in order for now (can upgrade to Delaunay later)
+    function connectStars() {
+      lines = [];
+      if (stars.length < 3) return;
+      for (let i = 0; i < stars.length - 1; i++) {
+        lines.push({ from: stars[i], to: stars[i+1], thickness: Math.random() * 2 + 1, flow: 0 });
+      }
+      // Add some cross connections for constellation feel
+      if (stars.length > 4) {
+        lines.push({ from: stars[0], to: stars[stars.length-1], thickness: 1, flow: 0 });
+      }
+    }
+
+    function drawLines() {
+      lines.forEach(line => {
+        line.flow += 0.02;
+        const grad = ctx.createLinearGradient(line.from.x, line.from.y, line.to.x, line.to.y);
+        grad.addColorStop(0, line.from.color);
+        grad.addColorStop(1, line.to.color);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = line.thickness;
+        ctx.beginPath();
+        ctx.moveTo(line.from.x, line.from.y);
+        ctx.lineTo(line.to.x, line.to.y);
+        ctx.stroke();
+
+        // Flowing light
+        const px = line.from.x + (line.to.x - line.from.x) * ((line.flow % 1));
+        const py = line.from.y + (line.to.y - line.from.y) * ((line.flow % 1));
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // Audio setup
+    let audioCtx, analyser, dataArray, bufferLength, stream, rafId;
+    let threshold = 20;
+    let lastStarTime = 0;
+    let isListening = false;
+    let mode = 'free';
+
+    async function startMic() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        source.connect(analyser);
+        analyser.fftSize = 2048;
+        bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+        isListening = true;
+        animate();
+      } catch (err) {
+        console.error('Mic access denied', err);
+      }
+    }
+
+    function stopMic() {
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      if (audioCtx) audioCtx.close();
+      isListening = false;
+      cancelAnimationFrame(rafId);
+    }
+
+    function analyzeAudio() {
+      analyser.getByteFrequencyData(dataArray);
+      let volume = 0;
+      let freqSum = 0;
+      let freqCount = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        volume += dataArray[i];
+        if (dataArray[i] > 0) {
+          freqSum += i * dataArray[i];
+          freqCount += dataArray[i];
+        }
+      }
+      volume /= bufferLength;
+      const mainFreq = freqCount > 0 ? (freqSum / freqCount) * (audioCtx.sampleRate / 2 / bufferLength) : 0;
+
+      document.getElementById('volume').textContent = volume.toFixed(2);
+      document.getElementById('frequency').textContent = mainFreq.toFixed(0);
+
+      if (volume > threshold && Date.now() - lastStarTime > 200) {
+        const x = (time % width) + Math.random() * 50 - 25; // Time-based x
+        const y = (mainFreq / 2000) * height; // Freq-based y, scaled
+        const size = Math.min(5 + volume / 10, 15);
+        let color;
+        if (mainFreq < 300) color = 'red';
+        else if (mainFreq < 1000) color = 'yellow';
+        else color = 'blue';
+        const brightness = volume / 255;
+        stars.push(new Star(x, y, size, color, brightness));
+        lastStarTime = Date.now();
+        voiceDuration += 0.2; // Approx
+        if (stars.length >= 3) connectStars();
+      }
+
+      return { volume, mainFreq };
+    }
+
+    // Animation loop
+    function animate() {
+      drawBackground();
+      if (isListening) {
+        const { volume, mainFreq } = analyzeAudio();
+        voiceDuration += 1/60;
+      }
+
+      stars.forEach(star => star.draw());
+      drawLines();
+
+      // Float constellation
+      stars.forEach(star => {
+        star.y += Math.sin(time / 100) * 0.1;
+      });
+
+      time += 1;
+      document.getElementById('starCount').textContent = stars.length;
+      document.getElementById('duration').textContent = voiceDuration.toFixed(1);
+
+      rafId = requestAnimationFrame(animate);
+    }
+
+    // Controls
+    document.getElementById('startBtn').addEventListener('click', () => {
+      startMic();
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+    });
+
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      stopMic();
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      stars = [];
+      lines = [];
+      voiceDuration = 0;
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const dataURL = canvas.toDataURL('image/png');
+      saveConstellation(dataURL);
+      const link = document.createElement('a');
+      link.download = 'constellation.png';
+      link.href = dataURL;
+      link.click();
+    });
+
+    document.getElementById('threshold').addEventListener('input', e => {
+      threshold = parseInt(e.target.value);
+    });
+
+    document.getElementById('modeSelect').addEventListener('change', e => {
+      mode = e.target.value;
+      // In guided mode, perhaps constrain positions, but for now placeholder
+    });
+
+    // Local storage for history
+    function saveConstellation(dataURL) {
+      let history = JSON.parse(localStorage.getItem('constellations') || '[]');
+      history.unshift(dataURL);
+      if (history.length > 10) history.pop();
+      localStorage.setItem('constellations', JSON.stringify(history));
+      loadGallery();
+    }
+
+    function loadGallery() {
+      const gallery = document.getElementById('gallery');
+      gallery.style.display = 'block';
+      gallery.innerHTML = '<h3>历史星座 (History)</h3>';
+      const history = JSON.parse(localStorage.getItem('constellations') || '[]');
+      history.forEach((url, i) => {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = `Constellation ${i+1}`;
+        img.onclick = () => {
+          // Load back? For now just view
+          alert('Viewing constellation');
+        };
+        gallery.appendChild(img);
+      });
+    }
+
+    loadGallery();
+    animate(); // Start background animation
+  </script>
+</body>
+</html>
