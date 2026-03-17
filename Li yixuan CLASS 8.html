@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>节奏气泡 · 手势音游</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0a0a0a;
+      overflow: hidden;
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-weight: 500;
+      color: #e8e8e8;
+      letter-spacing: 0.02em;
+    }
+
+    #ui {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: rgba(10, 10, 10, 0.94);
+      padding: 10px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 2px;
+    }
+
+    #ui input[type="file"] {
+      color: #e8e8e8;
+      cursor: pointer;
+    }
+
+    #ui label {
+      font-size: 12px;
+      font-weight: 500;
+      opacity: 0.85;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+    }
+
+    #ui button {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      outline: none;
+      padding: 6px 12px;
+      border-radius: 2px;
+      background: transparent;
+      color: #e8e8e8;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    #ui button:disabled {
+      cursor: not-allowed;
+      opacity: 0.35;
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    #ui button:not(:disabled):hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    #ui span.status {
+      font-size: 11px;
+      opacity: 0.6;
+      letter-spacing: 0.03em;
+    }
+
+    #ui .difficulty {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+    #ui .difficulty span {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-right: 6px;
+      letter-spacing: 0.04em;
+    }
+    #ui .difficulty button {
+      padding: 4px 8px;
+      font-size: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: transparent;
+      color: #e8e8e8;
+    }
+    #ui .difficulty button.active {
+      background: #fff;
+      color: #0a0a0a;
+      border-color: #fff;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    video {
+      display: none;
+    }
+
+    #hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 5;
+      pointer-events: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 20px 24px;
+    }
+    #score-box .label,
+    #combo-box .label {
+      font-size: 10px;
+      font-weight: 500;
+      opacity: 0.5;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    #score-box #score {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: #f0f0f0;
+    }
+    #combo-box #combo {
+      font-size: 20px;
+      font-weight: 600;
+      color: #c0c0c0;
+      letter-spacing: -0.02em;
+    }
+    #combo-box #combo.active {
+      animation: combo-pulse 0.12s ease-out;
+    }
+    @keyframes combo-pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+  </style>
+  <!-- MediaPipe Hands & Camera Utils（非模块版 CDN） -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+</head>
+<body>
+  <div id="hud">
+    <div id="score-box">
+      <div class="label">Score</div>
+      <div id="score">0</div>
+    </div>
+    <div id="combo-box">
+      <div class="label">Combo</div>
+      <div id="combo">0</div>
+    </div>
+  </div>
+  <div id="ui">
+    <span class="difficulty">
+      <span>难度</span>
+      <button type="button" data-difficulty="easy">简单</button>
+      <button type="button" data-difficulty="normal" class="active">正常</button>
+      <button type="button" data-difficulty="hard">困难</button>
+    </span>
+    <label>
+      选择本地音乐 / 视频：
+      <input id="fileInput" type="file" accept="audio/*,video/*,.mp4" />
+    </label>
+    <button id="hitSoundTestBtn" type="button">测试命中音效</button>
+    <button id="playPauseBtn" disabled>播放</button>
+    <span class="status" id="statusText">需要摄像头权限与本地音乐文件</span>
+  </div>
+
+  <video id="video" playsinline></video>
+  <video id="bgVideo" playsinline muted></video>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    // ---------------- 基本元素与尺寸 ----------------
+    const video = document.getElementById('video');      // 摄像头手势用
+    const bgVideo = document.getElementById('bgVideo');  // 背景 mp4 用
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const hitSoundTestBtn = document.getElementById('hitSoundTestBtn');
+    const statusText = document.getElementById('statusText');
+    const scoreEl = document.getElementById('score');
+    const comboEl = document.getElementById('combo');
+    let lastCombo = 0;
+
+    // 轻量级“手势”输入：仅双食指作为击泡判定区域（已关闭鼠标/触摸）
+    let pointer1X = 0;
+    let pointer1Y = 0;
+    let pointer1TargetX = 0;
+    let pointer1TargetY = 0;
+    let pointer1Active = false;
+    let pointer1FromHand = false;
+    let pointer1SeenAt = 0;
+    let pointer2X = 0;
+    let pointer2Y = 0;
+    let pointer2TargetX = 0;
+    let pointer2TargetY = 0;
+    let pointer2Active = false;
+    let pointer2FromHand = false;
+    let pointer2SeenAt = 0;
+    const pointer1Trail = [];
+    const pointer2Trail = [];
+    const POINTER_TRAIL_MAX = 5;
+    const POINTER_DEADZONE_X = 1;
+    const POINTER_DEADZONE_Y = 2;
+    const MAX_POINTER_STEP = 52;
+    const debugHandState = {
+      landmarksCount: 0,
+      handednessLabels: [],
+      pointer1Source: '-',
+      pointer2Source: '-',
+      updatedAt: 0
+    };
+
+    let hitLineY = 0;
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      hitLineY = canvas.height * 0.5;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 鼠标/触摸输入已关闭：仅由摄像头手势更新 pointer1/pointer2
+
+    // ---------------- 音游：得分 / 连击 / 判定 ----------------
+    let score = 0;
+    let combo = 0;
+    const JUDGMENT = { perfect: 100, great: 70, good: 40, bad: 0, miss: 0 };
+    const MISS_THRESHOLD = 90;
+    const floatingTexts = [];
+    const FLOATING_TEXT_DURATION = 900;
+
+    let difficulty = 'normal';
+    const DIFFICULTY = {
+      easy: {
+        drumCount: (strength) => 1,
+        melodyInterval: 480,
+        melodyThreshold: 0.38,
+        speedMul: 0.68,
+        sizeMul: 1.12,
+        perfectRange: 30,
+        greatRange: 58,
+        goodRange: 92,
+        handTolerance: 50
+      },
+      normal: {
+        drumCount: (strength) => strength > 0.4 ? 2 : 1,
+        melodyInterval: 380,
+        melodyThreshold: 0.32,
+        speedMul: 1,
+        sizeMul: 1,
+        perfectRange: 20,
+        greatRange: 48,
+        goodRange: 78,
+        handTolerance: 42
+      },
+      hard: {
+        drumCount: (strength) => strength > 0.25 ? 3 : 2,
+        melodyInterval: 260,
+        melodyThreshold: 0.26,
+        speedMul: 1.28,
+        sizeMul: 0.88,
+        perfectRange: 14,
+        greatRange: 36,
+        goodRange: 62,
+        handTolerance: 34
+      }
+    };
+
+    document.querySelectorAll('.difficulty button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        difficulty = btn.dataset.difficulty;
+        document.querySelectorAll('.difficulty button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    function addFloatingJudgment(text, x, y, hue) {
+      floatingTexts.push({
+        text,
+        x,
+        y,
+        alpha: 1,
+        createdAt: performance.now(),
+        hue: hue != null ? hue : 0
+      });
+    }
+
+    function getJudgmentFromDistance(dist) {
+      const d = DIFFICULTY[difficulty];
+      if (dist <= d.perfectRange) return 'perfect';
+      if (dist <= d.greatRange) return 'great';
+      if (dist <= d.goodRange) return 'good';
+      return 'bad';
+    }
+
+    // ---------------- 音频分析（节奏驱动气泡） ----------------
+    let audioContext = null;
+    let audioSource = null;
+    let analyser = null;
+    let audioBufferSource = null;
+    let audioPlaying = false;
+    let cymbalNoiseBuffer = null;
+    let bgVideoUrl = null;
+    let useBgVideo = false;
+
+    const FFT_SIZE = 2048;
+    const audioDataArray = new Uint8Array(FFT_SIZE);
+
+    function ensureAudioContextAndBuffers() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioContext && !analyser) {
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = FFT_SIZE;
+        analyser.smoothingTimeConstant = 0.7;
+      }
+      if (audioContext && !cymbalNoiseBuffer) {
+        const noiseDur = 0.18;
+        const bufferSize = Math.floor(audioContext.sampleRate * noiseDur);
+        cymbalNoiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const data = cymbalNoiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          const t = i / bufferSize;
+          data[i] = (Math.random() * 2 - 1) * (1 - t);
+        }
+      }
+    }
+
+    function setupAudio(arrayBuffer) {
+      ensureAudioContextAndBuffers();
+      if (!audioContext) return;
+
+      // 清理旧音源
+      if (audioBufferSource) {
+        try { audioBufferSource.stop(); } catch (e) {}
+        audioBufferSource.disconnect();
+        audioBufferSource = null;
+      }
+      if (audioSource) {
+        try { audioSource.disconnect(); } catch (e) {}
+        audioSource = null;
+      }
+
+      audioContext.decodeAudioData(arrayBuffer).then(buffer => {
+        ensureAudioContextAndBuffers();
+        if (!audioContext) return;
+
+        audioBufferSource = audioContext.createBufferSource();
+        audioBufferSource.buffer = buffer;
+
+        audioBufferSource.connect(analyser);
+        analyser.connect(audioContext.destination);
+
+        audioBufferSource.loop = true;
+        audioBufferSource.start(0);
+        audioPlaying = true;
+        useBgVideo = false;
+        playPauseBtn.disabled = false;
+        playPauseBtn.textContent = '暂停';
+        statusText.textContent = '在判定线附近击破气泡得分，Perfect 最高分！';
+      }).catch(err => {
+        console.error(err);
+        statusText.textContent = '音频解码失败，请换一个文件试试。';
+      });
+    }
+
+    // 命中音效：偏「金属板/镲」的短促击打（高频噪声为主，辅以轻微谐振）
+    function playHitSound(judgment, strength) {
+      if (!audioContext) return;
+      // 如果 AudioContext 还在 suspended 状态，这里尝试恢复一次
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      const ctxA = audioContext;
+      const t0 = ctxA.currentTime;
+      const dur = 0.16;
+      const baseStrength = strength || 0.7;
+      const loud = 0.58 + baseStrength * 0.5;
+
+      // 1) 高频噪声为主体：通过带通+高通滤波，打造金属板/镲的「沙」感
+      if (cymbalNoiseBuffer) {
+        const noise = ctxA.createBufferSource();
+        noise.buffer = cymbalNoiseBuffer;
+
+        const bp = ctxA.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 7500;
+        bp.Q.value = 3;
+
+        const hp = ctxA.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 4500;
+
+        const nGain = ctxA.createGain();
+        nGain.gain.setValueAtTime(loud * 1.0, t0);
+        nGain.gain.exponentialRampToValueAtTime(0.0005, t0 + dur);
+
+        noise.connect(bp).connect(hp).connect(nGain).connect(ctxA.destination);
+        noise.start(t0);
+        noise.stop(t0 + dur);
+      }
+
+      // 2) 轻微高频谐振：很小音量，只为加一点金属“铛”味，避免卡通旋律
+      const resGain = ctxA.createGain();
+      resGain.gain.setValueAtTime(loud * 0.35, t0);
+      resGain.gain.exponentialRampToValueAtTime(0.0006, t0 + dur);
+
+      const baseFreq =
+        judgment === 'perfect' ? 2300 :
+        judgment === 'great'   ? 2100 :
+        judgment === 'good'    ? 1900 : 1700;
+
+      const osc = ctxA.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(baseFreq, t0);
+      osc.frequency.linearRampToValueAtTime(baseFreq * 0.85, t0 + dur);
+      osc.connect(resGain);
+      resGain.connect(ctxA.destination);
+      osc.start(t0);
+      osc.stop(t0 + dur);
+    }
+
+    function setupVideoBackground(file) {
+      ensureAudioContextAndBuffers();
+      if (!audioContext) return;
+
+      // 清理旧 ObjectURL
+      if (bgVideoUrl) {
+        URL.revokeObjectURL(bgVideoUrl);
+        bgVideoUrl = null;
+      }
+      // 停止并断开旧音源
+      if (audioBufferSource) {
+        try { audioBufferSource.stop(); } catch (e) {}
+        audioBufferSource.disconnect();
+        audioBufferSource = null;
+      }
+      if (audioSource) {
+        try { audioSource.disconnect(); } catch (e) {}
+        audioSource = null;
+      }
+
+      bgVideoUrl = URL.createObjectURL(file);
+      bgVideo.src = bgVideoUrl;
+      bgVideo.loop = true;
+      bgVideo.muted = false;
+      bgVideo.playsInline = true;
+
+      audioSource = audioContext.createMediaElementSource(bgVideo);
+      audioSource.connect(analyser);
+      analyser.connect(audioContext.destination);
+
+      bgVideo.play().then(() => {
+        audioPlaying = true;
+        useBgVideo = true;
+        playPauseBtn.disabled = false;
+        playPauseBtn.textContent = '暂停';
+        statusText.textContent = '已加载 mp4：背景画面与节奏均来自该视频。';
+      }).catch(err => {
+        console.error(err);
+        statusText.textContent = '无法播放 mp4 视频，请检查文件。';
+      });
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      // 如果是视频文件（如 mp4），作为背景与音源；否则按原来方式解码音频
+      if (file.type && file.type.startsWith('video/')) {
+        setupVideoBackground(file);
+      } else if (file.name && file.name.toLowerCase().endsWith('.mp4')) {
+        setupVideoBackground(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setupAudio(event.target.result);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    });
+
+    // 手动测试命中音效：方便在没有真正命中时检查浏览器是否能播放
+    hitSoundTestBtn.addEventListener('click', () => {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      playHitSound('perfect', 0.9);
+    });
+
+    playPauseBtn.addEventListener('click', () => {
+      if (!audioContext || !audioBufferSource) return;
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      if (audioPlaying) {
+        audioContext.suspend();
+        audioPlaying = false;
+        playPauseBtn.textContent = '播放';
+      } else {
+        audioContext.resume();
+        audioPlaying = true;
+        playPauseBtn.textContent = '暂停';
+      }
+    });
+
+    function getAudioLevel() {
+      if (!analyser) return 0;
+      analyser.getByteFrequencyData(audioDataArray);
+      let sum = 0;
+      const start = 8;
+      const end = audioDataArray.length / 1.8;
+      for (let i = start; i < end; i++) sum += audioDataArray[i];
+      const avg = sum / (end - start);
+      return avg / 255;
+    }
+
+    // 鼓点检测：低频（底鼓）+ 中频（军鼓/镲），峰值触发
+    let beatSmooth = 0.0;
+    let lastBeatTime = 0;
+    let lastBeatDetectedAt = 0;
+    const BEAT_COOLDOWN_MS = 110;
+    const BEAT_PEAK_DELTA = 0.06;
+    const BEAT_MIN_LEVEL = 0.04;
+    let hihatEnv = 0; // 踩镲/高频能量包络，用于背景节奏流
+
+    function getDrumBeat(now) {
+      if (!analyser) return { beat: false, strength: 0, hihatLevel: 0 };
+      analyser.getByteFrequencyData(audioDataArray);
+      const len = audioDataArray.length;
+      let low = 0, mid = 0, high = 0;
+      for (let i = 0; i < Math.min(12, len); i++) low += audioDataArray[i];
+      for (let i = 12; i < Math.min(55, len); i++) mid += audioDataArray[i];
+      for (let i = 55; i < len; i++) high += audioDataArray[i];
+
+      const raw = (low * 0.6 + mid * 0.4) / 255;
+      const instant = Math.min(1, raw * 2.2);
+      // 若长时间未检测到鼓点，重置基线，避免后半段被前半段“压死”
+      if (now - lastBeatDetectedAt > 4000) {
+        beatSmooth = instant * 0.7;
+      }
+      // 较慢的平滑，避免长时间播放后基线过高
+      beatSmooth = beatSmooth * 0.9 + instant * 0.1;
+      const diff = instant - beatSmooth;
+      const isPeak = diff > BEAT_PEAK_DELTA && instant > BEAT_MIN_LEVEL;
+      const cooldownOk = now - lastBeatTime >= BEAT_COOLDOWN_MS;
+      // 高频包络：近似踩镲密度
+      const highNorm = Math.min(1, (high / Math.max(1, (len - 55) * 255)) * 4.0);
+      hihatEnv = hihatEnv * 0.92 + highNorm * 0.08;
+
+      if (isPeak && cooldownOk) {
+        lastBeatTime = now;
+        lastBeatDetectedAt = now;
+        return { beat: true, strength: Math.min(1, instant * 1.2), hihatLevel: hihatEnv };
+      }
+      return { beat: false, strength: instant, hihatLevel: hihatEnv };
+    }
+
+    // 旋律检测：中高频（人声/乐器主频），平滑后按持续能量生成气泡
+    let melodySmooth = 0;
+    let lastMelodySpawnTime = 0;
+    function getMelodyLevel() {
+      if (!analyser) return 0;
+      analyser.getByteFrequencyData(audioDataArray);
+      const len = audioDataArray.length;
+      let sum = 0;
+      for (let i = 55; i < Math.min(180, len); i++) sum += audioDataArray[i];
+      const raw = sum / (125 * 255);
+      const level = Math.min(1, raw * 2.5);
+      melodySmooth = melodySmooth * 0.88 + level * 0.12;
+      return melodySmooth;
+    }
+
+    // ---------------- 气泡系统：随机生成，2 秒生命周期 ----------------
+    const bubbles = [];
+    const MAX_BUBBLES = 12;
+    let spawnAccum = 0;       // 累积值，用于按音量控制生成频率（主要由 hi-hat 决定）
+    let noteTimes = [];       // 记录最近 1 秒的“note”时间戳，用于密度控制
+    let lastDoubleTime = 0;   // 最近一次双押出现的时间（秒）
+    const explosionParticles = [];
+    const MAX_PARTICLES = 0; // 暂时关闭颗粒系统，保证性能
+    const PARTICLE_STREAK_LEN = 14;
+    const PARTICLE_DURATION = 320;
+
+    function spawnExplosionParticles(x, y, count) {
+      // 关闭颗粒生成，避免在低配置设备上卡死
+      return;
+    }
+
+    function createBubble(strength, kind = 'normal') {
+      if (bubbles.length >= MAX_BUBBLES) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      // 位置更集中在屏幕中间附近（正态分布近似），并留出边缘安全区
+      const randNorm = () => {
+        const u = Math.random();
+        const v = Math.random();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); // N(0,1)
+      };
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const spreadX = w * 0.20;
+      const spreadY = h * 0.20;
+      const marginX = w * 0.08;
+      const marginY = h * 0.08;
+      let x = cx + randNorm() * spreadX;
+      let y = cy + randNorm() * spreadY;
+      x = Math.max(marginX, Math.min(w - marginX, x));
+      y = Math.max(marginY, Math.min(h - marginY, y));
+
+      const diff = DIFFICULTY[difficulty];
+      const sizeMul = diff.sizeMul;
+
+      // 基础尺寸：整体等比再放大一倍
+      const baseR = (40 + strength * 52) * sizeMul * 2.0;
+      const r0 = baseR * (0.94 + Math.random() * 0.12);
+
+      bubbles.push({
+        x,
+        y,
+        baseR: r0,
+        r: r0 * 0.5,      // 初始从较小开始
+        life: 0,          // 0~1
+        maxLife: 2000,    // 2 秒
+        alpha: 1,
+        colorType: kind   // 'normal' 或 'double'
+      });
+    }
+
+    function updateBubbles(dt) {
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        const b = bubbles[i];
+
+        // 推进生命周期
+        b.life += dt / b.maxLife;
+        if (b.life >= 1) {
+          bubbles.splice(i, 1);
+          continue;
+        }
+
+        // 从小到大：0.5R → 1.4R
+        const grow = 0.5 + 0.9 * b.life;
+        b.r = b.baseR * grow;
+
+        // 透明度：开始 1，逐渐变透明
+        b.alpha = 1 - b.life * 0.9;
+
+        // 轻微向上漂移
+        b.y -= dt * 0.015;
+
+        // 手势 / 光标击泡判定（两指），并给出 Perfect/Great/Good/Bad/Miss 判定
+        const hitRadius = b.r * 0.6;
+        const tryHitWithPointer = (px, py, active) => {
+          if (!active) return false;
+          const dx = px - b.x;
+          const dy = py - b.y;
+          return dx * dx + dy * dy <= hitRadius * hitRadius;
+        };
+
+        const hitByP1 = tryHitWithPointer(pointer1X, pointer1Y, pointer1Active);
+        const hitByP2 = tryHitWithPointer(pointer2X, pointer2Y, pointer2Active);
+
+        if (hitByP1 || hitByP2) {
+          // 用「相对生命周期」来近似时间判定：越早击中判定越高
+          const dist = b.life * 100; // 映射到和 DIFFICULTY 中范围相似的数量级
+          const judgment = getJudgmentFromDistance(dist);
+          playHitSound(judgment, 1.0);
+          score += JUDGMENT[judgment];
+          if (judgment === 'bad') combo = 0; else combo++;
+          const label =
+            judgment === 'perfect' ? 'Perfect!' :
+            judgment === 'great'   ? 'Great!'   :
+            judgment === 'good'    ? 'Good!'    :
+            'Bad';
+          addFloatingJudgment(label, b.x, b.y, 0);
+          bubbles.splice(i, 1);
+          continue;
+        }
+
+        // 生命周期结束但未被击中 → Miss
+        if (b.life >= 0.999) {
+          score += JUDGMENT.miss;
+          combo = 0;
+          addFloatingJudgment('Miss', b.x, b.y, 0);
+          bubbles.splice(i, 1);
+          continue;
+        }
+      }
+    }
+
+    function drawFloatingJudgments(now) {
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        const age = now - ft.createdAt;
+        if (age > FLOATING_TEXT_DURATION) {
+          floatingTexts.splice(i, 1);
+          continue;
+        }
+        const alpha = 1 - age / FLOATING_TEXT_DURATION;
+        const y = ft.y - age * 0.18;
+        ctx.save();
+        ctx.font = '500 22px "DM Sans", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const isMiss = ft.text === 'MISS';
+        const isBad = ft.text === 'Bad!';
+        ctx.fillStyle = (isMiss || isBad)
+          ? `rgba(180,180,180,${alpha})`
+          : `rgba(255,255,255,${alpha})`;
+        ctx.fillText(ft.text, ft.x, y);
+        ctx.restore();
+      }
+    }
+
+    function drawBubbles() {
+      for (const b of bubbles) {
+        if (b.exploding && b.explodeProgress < 0.25) {
+          const fade = 1 - b.explodeProgress / 0.25;
+          ctx.strokeStyle = `rgba(255,255,255,${fade * 0.35})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r * 1.2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        const hitR = b.r * 0.45;
+        const isDouble = b.colorType === 'double';
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+        if (isDouble) {
+          // 荧光橙双押气泡
+          g.addColorStop(0,  `rgba(255,210,120,${b.alpha * 0.18})`);
+          g.addColorStop(hitR / b.r, `rgba(255,200,90,${b.alpha * 0.4})`);
+          g.addColorStop(0.85, `rgba(255,170,40,${b.alpha * 0.82})`);
+          g.addColorStop(1,  `rgba(255,190,60,${b.alpha * 0.98})`);
+        } else {
+          // 普通白色气泡
+          g.addColorStop(0, `rgba(255,255,255,${b.alpha * 0.16})`);
+          g.addColorStop(hitR / b.r, `rgba(255,255,255,${b.alpha * 0.32})`);
+          g.addColorStop(0.85, `rgba(255,255,255,${b.alpha * 0.78})`);
+          g.addColorStop(1, `rgba(255,255,255,${b.alpha * 0.95})`);
+        }
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = isDouble
+          ? `rgba(255,210,120,${b.alpha * 0.9})`
+          : `rgba(255,255,255,${b.alpha * 0.6})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = isDouble
+          ? `rgba(255,210,120,${b.alpha * 0.55})`
+          : `rgba(255,255,255,${b.alpha * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, hitR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    function updateAndDrawExplosionParticles(dt) {
+      // 颗粒系统已关闭，这里保持空实现
+      explosionParticles.length = 0;
+    }
+
+    // ---------------- 手部识别（轻量版：仅用食指位置驱动“手势指针”，不绘制视频） ----------------
+    let hands = null;
+    let camera = null;
+    let handsBusy = false;
+    let camDrawCounter = 0;
+
+    function initHands() {
+      try {
+        hands = new Hands({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 0,
+          minDetectionConfidence: 0.3,
+          minTrackingConfidence: 0.3
+        });
+        hands.onResults((results) => {
+          const nowMs = performance.now();
+          if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+            // 不立即清空，交给主循环用短暂超时处理，减少抖动
+            statusText.textContent = '未检测到手部，请将双手放入镜头并保持光线充足。';
+            debugHandState.landmarksCount = 0;
+            debugHandState.handednessLabels = [];
+            debugHandState.pointer1Source = '-';
+            debugHandState.pointer2Source = '-';
+            debugHandState.updatedAt = nowMs;
+            return;
+          }
+          statusText.textContent = `手势识别中：${Math.min(results.multiHandLandmarks.length, 2)}只手`;
+          const handsLm = results.multiHandLandmarks;
+          const handsHd = results.multiHandedness || [];
+          debugHandState.landmarksCount = Math.min(handsLm.length, 2);
+          debugHandState.handednessLabels = handsHd
+            .slice(0, 2)
+            .map((h) => h?.classification?.[0]?.label || '?');
+          const dist2 = (ax, ay, bx, by) => {
+            const dx = ax - bx;
+            const dy = ay - by;
+            return dx * dx + dy * dy;
+          };
+          const limitJump = (point, prevX, prevY, prevSeenAt) => {
+            // 仅在连续跟踪时限幅，抑制识别瞬时乱跳
+            if (!prevSeenAt || (nowMs - prevSeenAt) > 180) return point;
+            const dx = point.x - prevX;
+            const dy = point.y - prevY;
+            const dist = Math.hypot(dx, dy);
+            if (dist <= MAX_POINTER_STEP) return point;
+            const scale = MAX_POINTER_STEP / (dist || 1);
+            return { x: prevX + dx * scale, y: prevY + dy * scale };
+          };
+
+          const toPoint = (lm) => {
+            const tip = lm[8];
+            const dip = lm[7];
+            // 用指尖+次关节的加权点，减少指尖单点抖动
+            const sx = tip.x * 0.7 + dip.x * 0.3;
+            const sy = tip.y * 0.7 + dip.y * 0.3;
+            return {
+              x: (1 - sx) * canvas.width,   // 镜像到画布坐标
+              y: sy * canvas.height
+            };
+          };
+
+          const applyPointToPointer = (point, isSecond) => {
+            if (isSecond) {
+              const stabilized = limitJump(point, pointer2TargetX, pointer2TargetY, pointer2SeenAt);
+              const { x, y } = stabilized;
+              pointer2TargetX = x;
+              pointer2TargetY = y;
+              pointer2Active = true;
+              pointer2FromHand = true;
+              pointer2SeenAt = nowMs;
+            } else {
+              const stabilized = limitJump(point, pointer1TargetX, pointer1TargetY, pointer1SeenAt);
+              const { x, y } = stabilized;
+              pointer1TargetX = x;
+              pointer1TargetY = y;
+              pointer1Active = true;
+              pointer1FromHand = true;
+              pointer1SeenAt = nowMs;
+            }
+          };
+
+          const candidates = handsLm.slice(0, 2).map((lm, idx) => {
+            const label = handsHd[idx]?.classification?.[0]?.label || '';
+            return { point: toPoint(lm), label };
+          });
+
+          let pointForP1 = null; // 固定为 Left hand
+          let pointForP2 = null; // 固定为 Right hand
+          const unknownPoints = [];
+          let usedUnknownForP1 = false;
+          let usedUnknownForP2 = false;
+
+          for (const c of candidates) {
+            if (c.label === 'Left' && !pointForP1) pointForP1 = c.point;
+            else if (c.label === 'Right' && !pointForP2) pointForP2 = c.point;
+            else unknownPoints.push(c.point);
+          }
+
+          // 若 handedness 缺失/不稳定，未知点按“更近目标点”补位
+          for (const p of unknownPoints) {
+            const d1 = pointForP1 ? Number.POSITIVE_INFINITY : dist2(p.x, p.y, pointer1TargetX, pointer1TargetY);
+            const d2 = pointForP2 ? Number.POSITIVE_INFINITY : dist2(p.x, p.y, pointer2TargetX, pointer2TargetY);
+            if (d1 <= d2) {
+              pointForP1 = p;
+              usedUnknownForP1 = true;
+            } else {
+              pointForP2 = p;
+              usedUnknownForP2 = true;
+            }
+          }
+
+          if (pointForP1) applyPointToPointer(pointForP1, false);
+          if (pointForP2) applyPointToPointer(pointForP2, true);
+          debugHandState.pointer1Source = pointForP1 ? (usedUnknownForP1 ? 'nearest' : 'Left') : '-';
+          debugHandState.pointer2Source = pointForP2 ? (usedUnknownForP2 ? 'nearest' : 'Right') : '-';
+          debugHandState.updatedAt = nowMs;
+        });
+
+        camera = new Camera(video, {
+          onFrame: async () => {
+            // 防并发，避免手势处理堆积导致延迟
+            if (handsBusy) return;
+            handsBusy = true;
+            try {
+              await hands.send({ image: video });
+            } finally {
+              handsBusy = false;
+            }
+          },
+          width: 224,
+          height: 168
+        });
+
+        camera.start().then(() => {
+          statusText.textContent = '已启用摄像头手势（双食指击泡），鼠标/触摸已关闭。';
+        }).catch(err => {
+          console.error(err);
+          statusText.textContent = '无法访问摄像头，请检查权限。';
+        });
+      } catch (e) {
+        console.error(e);
+        statusText.textContent = '手势模块初始化失败，请刷新并重试。';
+      }
+    }
+
+    // ---------------- 主循环 ----------------
+    let lastTime = performance.now();
+
+    function loop(now) {
+      const dt = now - lastTime;
+      lastTime = now;
+
+      const cw = canvas.width;
+      const ch = canvas.height;
+
+      // 背景：优先使用 mp4 视频，其次使用摄像头画面
+      // 注意：mp4 画面不做镜像，摄像头画面做镜像，保持手势方向自然
+      if (useBgVideo && bgVideo.readyState >= 2) {
+        ctx.save();
+        ctx.globalAlpha = 0.32;
+        ctx.drawImage(bgVideo, 0, 0, cw, ch);
+        ctx.restore();
+      } else if (video.readyState >= 2) {
+        // 摄像头背景每两帧绘制一次，显著降低渲染压力
+        camDrawCounter++;
+        if (camDrawCounter % 2 === 0) {
+          ctx.save();
+          ctx.translate(cw, 0);
+          ctx.scale(-1, 1);
+          ctx.globalAlpha = 0.24;
+          ctx.drawImage(video, 0, 0, cw, ch);
+          ctx.restore();
+        }
+      }
+      ctx.fillStyle = 'rgba(10, 10, 10, 0.35)';
+      ctx.fillRect(0, 0, cw, ch);
+
+      // 指针平滑：将识别到的目标点插值为连续移动，避免跳帧感
+      const handTimeoutMs = 220;
+      pointer1Active = (now - pointer1SeenAt) < handTimeoutMs;
+      pointer2Active = (now - pointer2SeenAt) < handTimeoutMs;
+
+      if (pointer1Active) {
+        // 无平滑实时模式 + 抖动死区抑制（尤其是上下抖动）
+        if (Math.abs(pointer1TargetX - pointer1X) >= POINTER_DEADZONE_X) {
+          pointer1X = pointer1TargetX;
+        }
+        if (Math.abs(pointer1TargetY - pointer1Y) >= POINTER_DEADZONE_Y) {
+          pointer1Y = pointer1TargetY;
+        }
+        pointer1Trail.push({ x: pointer1X, y: pointer1Y });
+        if (pointer1Trail.length > POINTER_TRAIL_MAX) pointer1Trail.shift();
+      } else {
+        pointer1Trail.length = 0;
+      }
+      if (pointer2Active) {
+        if (Math.abs(pointer2TargetX - pointer2X) >= POINTER_DEADZONE_X) {
+          pointer2X = pointer2TargetX;
+        }
+        if (Math.abs(pointer2TargetY - pointer2Y) >= POINTER_DEADZONE_Y) {
+          pointer2Y = pointer2TargetY;
+        }
+        pointer2Trail.push({ x: pointer2X, y: pointer2Y });
+        if (pointer2Trail.length > POINTER_TRAIL_MAX) pointer2Trail.shift();
+      } else {
+        pointer2Trail.length = 0;
+      }
+
+      // 根据整体音量 & 踩镲密度生成气泡：整段音频都保持有节奏的出现频率
+      const level = getAudioLevel(); // 0~1
+      const { beat, strength, hihatLevel } = getDrumBeat(now);
+
+      // 1 秒内音符密度控制（简单/普通/困难）
+      const nowSec = performance.now() / 1000;
+      noteTimes = noteTimes.filter(t => nowSec - t < 1.0);
+      let maxNotesPerSec = 6;
+      if (difficulty === 'easy') maxNotesPerSec = 3;
+      else if (difficulty === 'hard') maxNotesPerSec = 10;
+
+      const canSpawn = () => noteTimes.length < maxNotesPerSec && bubbles.length < MAX_BUBBLES;
+
+      // 强鼓点：保证每个峰值有一个较稳的“主 note”
+      if (beat && canSpawn()) {
+        const remainingSlots = Math.min(MAX_BUBBLES - bubbles.length, maxNotesPerSec - noteTimes.length);
+        const sinceLastDouble = nowSec - lastDoubleTime;
+        const canDouble = (sinceLastDouble >= 3.0); // 3 秒内只能出现一组双押
+
+        // 强鼓点且有足够空间、且满足冷却时生成双押：两颗荧光橙气泡
+        if (strength > 0.6 && remainingSlots >= 2 && canDouble) {
+          createBubble(strength, 'double');
+          createBubble(strength, 'double');
+          noteTimes.push(nowSec, nowSec);
+          lastDoubleTime = nowSec;
+        } else {
+          createBubble(strength, 'normal');
+          noteTimes.push(nowSec);
+        }
+      }
+
+      // hi-hat / 总体能量：控制基础 note 流（略降白色气泡数量）
+      if (canSpawn()) {
+        const base = 0.00018 + level * 0.0005;
+        const hhBoost = 0.00025 * hihatLevel;
+        spawnAccum += dt * (base + hhBoost);
+        const target = 1.0;
+        while (spawnAccum >= target && canSpawn()) {
+          spawnAccum -= target;
+          createBubble(hihatLevel, 'normal');
+          noteTimes.push(nowSec);
+        }
+      }
+
+      // 更新 & 碰撞检测（当前为纯节奏气泡，无手势判定）
+      updateBubbles(dt);
+
+      // 仅绘制气泡，不再使用判定线
+      drawBubbles();
+      updateAndDrawExplosionParticles(dt);
+      drawFloatingJudgments(now);
+
+      // 食指 / 光标判定点可视化（两只手 / 两个指针）
+      const drawPointer = (x, y, trail, active, fromHand, isSecond) => {
+        if (!active) return;
+
+        // 先画拖尾：根据历史轨迹画多段渐隐线
+        if (trail && trail.length > 1) {
+          ctx.save();
+          ctx.lineWidth = 3;
+          for (let i = 1; i < trail.length; i++) {
+            const p0 = trail[i - 1];
+            const p1 = trail[i];
+            const t = i / trail.length;
+            const alpha = 0.08 + 0.42 * t;
+            const color = fromHand
+              ? (isSecond
+                  ? `rgba(255,210,120,${alpha})`
+                  : `rgba(120,200,255,${alpha})`)
+              : `rgba(255,255,255,${alpha})`;
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // 再画当前判定光标
+        ctx.save();
+        const colorNow = fromHand
+          ? (isSecond ? 'rgba(255,210,120,1.0)' : 'rgba(120,200,255,1.0)')
+          : 'rgba(255,255,255,1.0)';
+        // 先画一层白色底描边，增强可见性
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.lineWidth = 3;
+        const r = 20;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = colorNow;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = colorNow;
+        ctx.beginPath();
+        ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.6, y);
+        ctx.lineTo(x + r * 0.6, y);
+        ctx.moveTo(x, y - r * 0.6);
+        ctx.lineTo(x, y + r * 0.6);
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      drawPointer(pointer1X, pointer1Y, pointer1Trail, pointer1Active, pointer1FromHand, false);
+      drawPointer(pointer2X, pointer2Y, pointer2Trail, pointer2Active, pointer2FromHand, true);
+
+      // 左上角调试层：快速定位“模型未识别”还是“点映射未显示”
+      const drawDebugOverlay = () => {
+        const ageMs = Math.max(0, Math.round(now - debugHandState.updatedAt));
+        const labels = debugHandState.handednessLabels.length
+          ? debugHandState.handednessLabels.join(', ')
+          : '-';
+        const lines = [
+          `LM: ${debugHandState.landmarksCount}`,
+          `HD: ${labels}`,
+          `P1: ${pointer1Active ? 'on' : 'off'} (${Math.round(pointer1X)}, ${Math.round(pointer1Y)}) src=${debugHandState.pointer1Source}`,
+          `P2: ${pointer2Active ? 'on' : 'off'} (${Math.round(pointer2X)}, ${Math.round(pointer2Y)}) src=${debugHandState.pointer2Source}`,
+          `Age: ${ageMs}ms`
+        ];
+        const x = 12;
+        const y = 12;
+        const lineH = 16;
+        const boxW = 350;
+        const boxH = 12 + lines.length * lineH + 8;
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(x, y, boxW, boxH);
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1);
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.font = '12px monospace';
+        for (let i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], x + 10, y + 18 + i * lineH);
+        }
+        ctx.restore();
+      };
+      drawDebugOverlay();
+
+      // HUD 更新
+      if (scoreEl) scoreEl.textContent = score;
+      if (comboEl) {
+        comboEl.textContent = combo;
+        if (combo > lastCombo && combo > 1) {
+          comboEl.classList.add('active');
+          setTimeout(() => comboEl.classList.remove('active'), 120);
+        }
+        lastCombo = combo;
+      }
+
+      // 手部轮廓绘制暂时关闭，以简化渲染负载
+
+      requestAnimationFrame(loop);
+    }
+
+    // 初始化
+    window.addEventListener('load', () => {
+      initHands();
+      requestAnimationFrame(loop);
+    });
+  </script>
+</body>
+</html>
+
