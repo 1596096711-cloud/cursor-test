@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Goose Eats Tiles</title>
+  <style>
+    body { margin:0; display:grid; place-items:center; height:100vh; background:#0b0f14; color:#d6f6ff; font-family:system-ui; }
+    .hud { width:min(900px, 92vw); display:flex; justify-content:space-between; margin:12px 0; opacity:.9; }
+    canvas { background:#070a0f; border:1px solid rgba(0,255,240,.25); box-shadow:0 0 30px rgba(0,255,240,.12); }
+    .hint { font-size:12px; opacity:.8; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div>分数：<span id="score">0</span></div>
+    <div class="hint">点击大鹅周围 1 格内的方块即可吃掉（石头不可吃）</div>
+  </div>
+  <canvas id="c" width="900" height="540"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const tileSize = 45;
+const mapW = 20, mapH = 12;
+const offset = { x: 0, y: 0 };
+
+const T = { GRASS:'grass', BREAD:'bread', STONE:'stone', EMPTY:'empty' };
+const tileScore = { [T.GRASS]: 1, [T.BREAD]: 5, [T.STONE]: 0, [T.EMPTY]: 0 };
+
+let score = 0;
+const scoreEl = document.getElementById('score');
+
+const goose = { x: 10, y: 6, eatRange: 1 };
+
+const map = Array.from({length: mapH}, (_, y) =>
+  Array.from({length: mapW}, (_, x) => {
+    // 简单随机地图
+    const r = Math.random();
+    if (r < 0.08) return T.STONE;
+    if (r < 0.18) return T.BREAD;
+    return T.GRASS;
+  })
+);
+
+function isEdible(t) { return t !== T.STONE && t !== T.EMPTY; }
+function inRange(ax, ay, bx, by, range) {
+  const d = Math.abs(ax - bx) + Math.abs(ay - by); // 曼哈顿距离
+  return d <= range;
+}
+
+let hover = null;
+
+function screenToTile(mx, my) {
+  const x = Math.floor((mx - offset.x) / tileSize);
+  const y = Math.floor((my - offset.y) / tileSize);
+  if (x < 0 || y < 0 || x >= mapW || y >= mapH) return null;
+  return { x, y };
+}
+
+function eatTile(x, y) {
+  const t = map[y][x];
+  if (!inRange(goose.x, goose.y, x, y, goose.eatRange)) return;
+  if (!isEdible(t)) return;
+
+  // 吃：得分 + 变空地
+  score += tileScore[t];
+  scoreEl.textContent = score;
+  map[y][x] = T.EMPTY;
+
+  // 轻量反馈：闪一下
+  flashAt(x, y);
+}
+
+let flashes = [];
+function flashAt(x, y) {
+  flashes.push({ x, y, life: 12 });
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // 背景微光
+  ctx.fillStyle = '#05070b';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // 地图
+  for (let y=0; y<mapH; y++) {
+    for (let x=0; x<mapW; x++) {
+      const t = map[y][x];
+      const px = offset.x + x*tileSize;
+      const py = offset.y + y*tileSize;
+
+      // tile 色块（后续可替换成贴图）
+      let fill = '#133224';
+      if (t === T.BREAD) fill = '#caa24a';
+      if (t === T.STONE) fill = '#3b4657';
+      if (t === T.EMPTY) fill = '#0b0f14';
+
+      ctx.fillStyle = fill;
+      ctx.fillRect(px, py, tileSize, tileSize);
+
+      // 网格线
+      ctx.strokeStyle = 'rgba(0,255,240,0.06)';
+      ctx.strokeRect(px+.5, py+.5, tileSize, tileSize);
+    }
+  }
+
+  // 可吃范围高亮
+  ctx.fillStyle = 'rgba(0,255,240,0.06)';
+  for (let y=0; y<mapH; y++) for (let x=0; x<mapW; x++) {
+    if (inRange(goose.x, goose.y, x, y, goose.eatRange)) {
+      const px = x*tileSize, py = y*tileSize;
+      ctx.fillRect(px, py, tileSize, tileSize);
+    }
+  }
+
+  // 悬停高亮
+  if (hover) {
+    const {x,y} = hover;
+    ctx.strokeStyle = inRange(goose.x,goose.y,x,y,goose.eatRange) ? 'rgba(0,255,240,.8)' : 'rgba(255,0,110,.7)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x*tileSize+1, y*tileSize+1, tileSize-2, tileSize-2);
+    ctx.lineWidth = 1;
+  }
+
+  // 大鹅（先用简单图形占位）
+  const gx = goose.x*tileSize + tileSize/2;
+  const gy = goose.y*tileSize + tileSize/2;
+
+  // 身体
+  ctx.fillStyle = '#e8f7ff';
+  ctx.beginPath();
+  ctx.ellipse(gx, gy+4, 16, 12, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // 头
+  ctx.beginPath();
+  ctx.ellipse(gx+10, gy-8, 10, 8, 0.2, 0, Math.PI*2);
+  ctx.fill();
+
+  // 嘴
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.moveTo(gx+20, gy-8);
+  ctx.lineTo(gx+30, gy-4);
+  ctx.lineTo(gx+20, gy);
+  ctx.closePath();
+  ctx.fill();
+
+  // 眼睛
+  ctx.fillStyle = '#0b0f14';
+  ctx.beginPath();
+  ctx.arc(gx+12, gy-10, 2, 0, Math.PI*2);
+  ctx.fill();
+
+  // 闪光反馈
+  for (const f of flashes) {
+    const a = f.life / 12;
+    ctx.fillStyle = `rgba(255,0,255,${0.25*a})`;
+    ctx.fillRect(f.x*tileSize, f.y*tileSize, tileSize, tileSize);
+    f.life--;
+  }
+  flashes = flashes.filter(f => f.life > 0);
+
+  requestAnimationFrame(draw);
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  hover = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
+});
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const t = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
+  if (!t) return;
+  eatTile(t.x, t.y);
+});
+
+draw();
+</script>
+</body>
+</html>

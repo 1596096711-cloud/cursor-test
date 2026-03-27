@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Three.js Starter — Rotating Cube</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+      font-family: system-ui, sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #info {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: white;
+      background: rgba(0,0,0,0.4);
+      padding: 12px 16px;
+      border-radius: 8px;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="info">
+    Drag to rotate • Scroll to zoom
+  </div>
+
+  <!-- Three.js + OrbitControls from CDN (updated 2025+) -->
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/OrbitControls.js';
+
+    // ─── Scene ────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a1f);
+
+    // ─── Camera ───────────────────────────────────────────────
+    const camera = new THREE.PerspectiveCamera(
+      50,                           // FOV
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    camera.position.set(0, 1.2, 4);
+
+    // ─── Renderer ─────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // ─── Controls ─────────────────────────────────────────────
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 12;
+
+    // ─── Lights ───────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight.position.set(4, 8, 5);
+    scene.add(dirLight);
+
+    // ─── Cube ─────────────────────────────────────────────────
+    const geometry = new THREE.BoxGeometry(1.6, 1.6, 1.6);
+
+    // Nice looking material
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x44ffaa,
+      metalness: 0.2,
+      roughness: 0.35,
+      envMapIntensity: 1.2
+    });
+
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    // Optional: wireframe helper
+    // const wire = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({color:0xffffff, wireframe:true}));
+    // cube.add(wire);
+
+    // ─── Animation loop ───────────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Gentle rotation
+      cube.rotation.x += 0.004;
+      cube.rotation.y += 0.006;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // ─── Responsive resize ────────────────────────────────────
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
