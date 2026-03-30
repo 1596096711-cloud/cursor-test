@@ -1,0 +1,12 @@
+@import "../tailwind.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>声音烟花 - Voice Fireworks</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
+
+  <style>
+    body { margin:0; overflow:hidden; background:#000; }
+    #controls {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 100;
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      border-radius: 10px;
+      color: white;
+      font-family: system-ui, sans-serif;
+    }
+    button, input { margin: 8px 0; padding: 10px; width: 100%; border-radius: 5px; }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <button id="startBtn">开始聆听麦克风</button>
+  <p>音量阈值: <span id="volValue">15</span></p>
+  <input type="range" id="threshold" min="5" max="60" value="15">
+  <p>当前音量: <span id="volume">0.00</span></p>
+  <p>频率: <span id="freq">0</span> Hz</p>
+</div>
+
+<script>
+// ==================== 主程序 ====================
+let mic, fft;
+let fireworks = [];
+let threshold = 15;
+
+function setup() {
+  createCanvas(window.innerWidth, window.innerHeight);
+  colorMode(HSB, 360, 100, 100, 100);
+
+  mic = new p5.AudioIn();
+  fft = new p5.FFT(0.8, 128);
+
+  document.getElementById('startBtn').addEventListener('click', startListening);
+  document.getElementById('threshold').addEventListener('input', (e) => {
+    threshold = parseInt(e.target.value);
+    document.getElementById('volValue').textContent = threshold;
+  });
+}
+
+function startListening() {
+  userStartAudio().then(() => {
+    mic.start();
+    fft.setInput(mic);
+    document.getElementById('startBtn').textContent = "正在聆听...";
+    document.getElementById('startBtn').disabled = true;
+  });
+}
+
+function windowResized() {
+  resizeCanvas(window.innerWidth, window.innerHeight);
+}
+
+// 烟花类
+class Firework {
+  constructor() {
+    this.x = random(width);
+    this.y = height;
+    this.targetY = random(height * 0.15, height * 0.45);
+    this.speed = random(8, 14);
+    this.exploded = false;
+    this.particles = [];
+    
+    // 颜色由频率决定
+    this.hue = map(currentFreq, 100, 4000, 0, 300); // 低频红 → 高频蓝紫
+    this.hue = constrain(this.hue, 0, 360);
+  }
+
+  update() {
+    if (!this.exploded) {
+      this.y -= this.speed;
+      if (this.y <= this.targetY) this.explode();
+    } else {
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        this.particles[i].update();
+        if (this.particles[i].done()) this.particles.splice(i, 1);
+      }
+    }
+  }
+
+  explode() {
+    this.exploded = true;
+    const particleCount = map(currentVolume, 0, 50, 60, 220); // 声音越大，粒子越多
+    for (let i = 0; i < particleCount; i++) {
+      this.particles.push(new Particle(this.x, this.y, this.hue));
+    }
+  }
+
+  show() {
+    if (!this.exploded) {
+      stroke(this.hue, 80, 100);
+      strokeWeight(6);
+      point(this.x, this.y);
+    } else {
+      for (let p of this.particles) p.show();
+    }
+  }
+
+  done() {
+    return this.exploded && this.particles.length === 0;
+  }
+}
+
+// 粒子类
+class Particle {
+  constructor(x, y, hue) {
+    this.pos = createVector(x, y);
+    this.vel = p5.Vector.random2D();
+    this.vel.mult(random(2, 12));
+    this.acc = createVector(0, 0);
+    this.lifespan = 255;
+    this.hue = hue + random(-30, 30); // 增加颜色随机性
+  }
+
+  applyForce(force) {
+    this.acc.add(force);
+  }
+
+  update() {
+    this.applyForce(createVector(0, 0.15)); // 重力
+    this.vel.add(this.acc);
+    this.pos.add(this.vel);
+    this.acc.mult(0);
+    this.lifespan -= 4;
+  }
+
+  show() {
+    colorMode(HSB);
+    stroke(this.hue, 90, 100, this.lifespan / 3);
+    strokeWeight(4);
+    point(this.pos.x, this.pos.y);
+  }
+
+  done() {
+    return this.lifespan < 0;
+  }
+}
+
+// 全局声音数据
+let currentVolume = 0;
+let currentFreq = 0;
+
+function draw() {
+  background(0, 0, 10, 25);   // 半透明黑色尾迹，营造夜空感
+
+  if (mic && mic.enabled) {
+    currentVolume = mic.getLevel() * 1000;   // 转换为更易读的数值
+    let spectrum = fft.analyze();
+    currentFreq = fft.getCentroid();         // 获取中心频率（非常好用）
+
+    document.getElementById('volume').textContent = currentVolume.toFixed(1);
+    document.getElementById('freq').textContent = Math.round(currentFreq);
+
+    // 根据音量触发烟花
+    if (currentVolume > threshold && random(1) < 0.35) {
+      // 声音越大，同时发射越多烟花
+      let count = map(currentVolume, threshold, 60, 1, 4);
+      for (let i = 0; i < floor(count); i++) {
+        fireworks.push(new Firework());
+      }
+    }
+  }
+
+  // 更新并绘制所有烟花
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    fireworks[i].update();
+    fireworks[i].show();
+    if (fireworks[i].done()) fireworks.splice(i, 1);
+  }
+}
+</script>
+</body>
+</html>

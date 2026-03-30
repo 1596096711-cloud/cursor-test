@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>色彩声音交互游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ff5e7d, #ff8a00, #ffd166, #06d6a0, #118ab2);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: #a0aec0;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .game-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        
+        .color-disk-container {
+            flex: 1;
+            min-width: 350px;
+            max-width: 500px;
+        }
+        
+        .color-disk {
+            width: 100%;
+            aspect-ratio: 1/1;
+            border-radius: 50%;
+            background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        
+        .color-disk:hover {
+            transform: scale(1.02);
+        }
+        
+        .color-disk::after {
+            content: '';
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.1);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .controls {
+            flex: 1;
+            min-width: 300px;
+            max-width: 400px;
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group h3 {
+            margin-bottom: 15px;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .control-group h3 i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+        
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .slider-label span:last-child {
+            font-weight: bold;
+            color: #ffd166;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 10px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            outline: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        #hue-slider::-webkit-slider-thumb {
+            background: #ff5e7d;
+        }
+        
+        #saturation-slider::-webkit-slider-thumb {
+            background: #06d6a0;
+        }
+        
+        #lightness-slider::-webkit-slider-thumb {
+            background: #ffd166;
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .mode-btn.active {
+            background: linear-gradient(90deg, #ff5e7d, #ff8a00);
+            box-shadow: 0 5px 15px rgba(255, 94, 125, 0.4);
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        
+        .action-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        #save-btn {
+            background: linear-gradient(90deg, #06d6a0, #118ab2);
+            color: white;
+        }
+        
+        #clear-btn {
+            background: rgba(239, 68, 68, 0.2);
+            color: #feb2b2;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 7px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .color-history {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .color-history h2 {
+            margin-bottom: 20px;
+            color: #e2e8f0;
+        }
+        
+        .history-colors {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .history-color {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.3s ease;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .history-color:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .history-color::after {
+            content: '♪';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            color: white;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .history-color:hover::after {
+            opacity: 1;
+        }
+        
+        .instructions {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .instructions h2 {
+            margin-bottom: 15px;
+            color: #e2e8f0;
+        }
+        
+        .instructions ul {
+            list-style-type: none;
+            padding-left: 10px;
+        }
+        
+        .instructions li {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .instructions li:before {
+            content: '•';
+            color: #ffd166;
+            font-size: 1.5rem;
+            position: absolute;
+            left: 0;
+            top: -5px;
+        }
+        
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.7);
+            transform: scale(0);
+            animation: ripple-animation 0.6s linear;
+            pointer-events: none;
+        }
+        
+        @keyframes ripple-animation {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .game-area {
+                flex-direction: column;
+            }
+            
+            .color-disk-container, .controls {
+                max-width: 100%;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>色彩声音交互游戏</h1>
+            <p class="subtitle">探索色彩与声音的奇妙关联 - 点击、滑动、创造属于你的色彩交响乐</p>
+        </header>
+        
+        <div class="game-area">
+            <div class="color-disk-container">
+                <div class="color-disk" id="colorDisk"></div>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <h3><i class="fas fa-palette"></i> 色彩控制</h3>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>色相</span>
+                            <span id="hue-value">0°</span>
+                        </div>
+                        <input type="range" min="0" max="360" value="0" class="slider" id="hue-slider">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>饱和度</span>
+                            <span id="saturation-value">100%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value="100" class="slider" id="saturation-slider">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>明度</span>
+                            <span id="lightness-value">50%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value="50" class="slider" id="lightness-slider">
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <h3><i class="fas fa-music"></i> 声音模式</h3>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" data-mode="single">单音模式</button>
+                        <button class="mode-btn" data-mode="chord">和弦模式</button>
+                        <button class="mode-btn" data-mode="ambient">环境模式</button>
+                    </div>
+                </div>
+                
+                <div class="actions">
+                    <button class="action-btn" id="save-btn">
+                        <i class="fas fa-save"></i> 保存色彩
+                    </button>
+                    <button class="action-btn" id="clear-btn">
+                        <i class="fas fa-trash-alt"></i> 清除历史
+                    </button>
+                </div>
+                
+                <div class="current-color-display" style="margin-top: 25px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                    <div style="display: flex; align-items: center;">
+                        <div id="current-color-box" style="width: 50px; height: 50px; border-radius: 8px; margin-right: 15px; background-color: hsl(0, 100%, 50%);"></div>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">当前色彩</div>
+                            <div id="current-color-value">HSL(0°, 100%, 50%)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="color-history">
+            <h2><i class="fas fa-history"></i> 色彩历史</h2>
+            <div class="history-colors" id="historyColors">
+                <!-- 历史色彩将通过JS动态添加 -->
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h2><i class="fas fa-info-circle"></i> 游戏指南</h2>
+            <ul>
+                <li><strong>点击色盘</strong>任意位置播放对应色彩的声音</li>
+                <li><strong>拖拽色盘</strong>可连续播放滑音效果</li>
+                <li>使用<strong>控制滑块</strong>调整色彩参数并实时预览声音</li>
+                <li>选择不同的<strong>声音模式</strong>获得不同的听觉体验</li>
+                <li><strong>保存色彩</strong>到历史记录，随时重新播放</li>
+                <li>点击<strong>历史记录中的色彩</strong>可再次播放该色彩声音</li>
+            </ul>
+        </div>
+        
+        <footer>
+            <p>色彩声音交互游戏 | 使用Web Audio API和Canvas技术 | 探索视听联觉的奇妙世界</p>
+        </footer>
+    </div>
+
+    <script>
+        // 初始化Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let currentMode = 'single';
+        let colorHistory = [];
+        
+        // DOM元素
+        const colorDisk = document.getElementById('colorDisk');
+        const hueSlider = document.getElementById('hue-slider');
+        const saturationSlider = document.getElementById('saturation-slider');
+        const lightnessSlider = document.getElementById('lightness-slider');
+        const hueValue = document.getElementById('hue-value');
+        const saturationValue = document.getElementById('saturation-value');
+        const lightnessValue = document.getElementById('lightness-value');
+        const currentColorBox = document.getElementById('current-color-box');
+        const currentColorValue = document.getElementById('current-color-value');
+        const historyColors = document.getElementById('historyColors');
+        const saveBtn = document.getElementById('save-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        
+        // 当前色彩值
+        let currentHue = 0;
+        let currentSaturation = 100;
+        let currentLightness = 50;
+        
+        // 更新色盘显示
+        function updateColorDisk() {
+            colorDisk.style.background = `hsl(${currentHue}, ${currentSaturation}%, ${currentLightness}%)`;
+            currentColorBox.style.backgroundColor = `hsl(${currentHue}, ${currentSaturation}%, ${currentLightness}%)`;
+            currentColorValue.textContent = `HSL(${currentHue}°, ${currentSaturation}%, ${currentLightness}%)`;
+        }
+        
+        // 初始化色盘事件
+        function initColorDisk() {
+            // 点击色盘播放声音
+            colorDisk.addEventListener('click', function(e) {
+                const rect = colorDisk.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // 计算点击位置的色彩
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                // 计算相对于中心的角度和距离
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const maxDistance = centerX;
+                
+                // 角度决定色相，距离决定饱和度
+                let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                if (angle < 0) angle += 360;
+                
+                // 限制距离在圆盘范围内
+                const normalizedDistance = Math.min(distance / maxDistance, 1);
+                
+                // 设置当前色彩
+                currentHue = Math.round(angle);
+                currentSaturation = Math.round(normalizedDistance * 100);
+                
+                // 更新滑块和显示
+                hueSlider.value = currentHue;
+                saturationSlider.value = currentSaturation;
+                hueValue.textContent = `${currentHue}°`;
+                saturationValue.textContent = `${currentSaturation}%`;
+                
+                // 更新色盘
+                updateColorDisk();
+                
+                // 播放声音
+                playColorSound(currentHue, currentSaturation, currentLightness);
+                
+                // 添加涟漪效果
+                createRipple(e);
+            });
+            
+            // 拖拽色盘连续播放声音
+            let isDragging = false;
+            colorDisk.addEventListener('mousedown', () => isDragging = true);
+            colorDisk.addEventListener('mouseup', () => isDragging = false);
+            colorDisk.addEventListener('mouseleave', () => isDragging = false);
+            
+            colorDisk.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                
+                const rect = colorDisk.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // 计算点击位置的色彩
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                // 计算相对于中心的角度和距离
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const maxDistance = centerX;
+                
+                // 角度决定色相，距离决定饱和度
+                let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                if (angle < 0) angle += 360;
+                
+                // 限制距离在圆盘范围内
+                const normalizedDistance = Math.min(distance / maxDistance, 1);
+                
+                // 设置当前色彩
+                currentHue = Math.round(angle);
+                currentSaturation = Math.round(normalizedDistance * 100);
+                
+                // 更新滑块和显示
+                hueSlider.value = currentHue;
+                saturationSlider.value = currentSaturation;
+                hueValue.textContent = `${currentHue}°`;
+                saturationValue.textContent = `${currentSaturation}%`;
+                
+                // 更新色盘
+                updateColorDisk();
+                
+                // 播放声音（拖拽时播放较短的声音）
+                playColorSound(currentHue, currentSaturation, currentLightness, 0.1);
+            });
+            
+            // 触摸设备支持
+            colorDisk.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                isDragging = true;
+                const touch = e.touches[0];
+                simulateMouseEvent('mousedown', touch);
+            });
+            
+            colorDisk.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!isDragging) return;
+                const touch = e.touches[0];
+                simulateMouseEvent('mousemove', touch);
+            });
+            
+            colorDisk.addEventListener('touchend', () => {
+                isDragging = false;
+            });
+        }
+        
+        // 模拟鼠标事件（用于触摸设备）
+        function simulateMouseEvent(eventName, touch) {
+            const mouseEvent = new MouseEvent(eventName, {
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                bubbles: true
+            });
+            colorDisk.dispatchEvent(mouseEvent);
+        }
+        
+        // 创建涟漪效果
+        function createRipple(e) {
+            const ripple = document.createElement('div');
+            ripple.classList.add('ripple');
+            
+            const rect = colorDisk.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            const x = e.clientX - rect.left - size / 2;
+            const y = e.clientY - rect.top - size / 2;
+            
+            ripple.style.width = ripple.style.height = `${size}px`;
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            
+            colorDisk.appendChild(ripple);
+            
+            // 动画结束后移除涟漪元素
+            setTimeout(() => {
+                ripple.remove();
+            }, 600);
+        }
+        
+        // 播放色彩声音
+        function playColorSound(hue, saturation, lightness, duration = 0.5) {
+            // 根据模式选择不同的播放方式
+            if (currentMode === 'single') {
+                playSingleTone(hue, saturation, lightness, duration);
+            } else if (currentMode === 'chord') {
+                playChord(hue, saturation, lightness);
+            } else if (currentMode === 'ambient') {
+                // 环境模式会持续播放，这里只播放一个短音作为预览
+                playAmbientTone(hue, saturation, lightness, 0.3);
+            }
+        }
+        
+        // 播放单音
+        function playSingleTone(hue, saturation, lightness, duration) {
+            // 创建振荡器
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            // 配置声音参数
+            // 色相映射到频率 (200-1200Hz)
+            const frequency = 200 + (hue / 360) * 1000;
+            
+            // 饱和度映射到滤波器频率
+            const filterFreq = 500 + (saturation / 100) * 2000;
+            
+            // 明度映射到音量
+            const volume = 0.1 + (lightness / 100) * 0.4;
+            
+            // 设置振荡器类型
+            oscillator.type = saturation > 70 ? 'sawtooth' : 'sine';
+            
+            // 设置频率
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            // 创建滤波器
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(filterFreq, audioContext.currentTime);
+            
+            // 连接节点
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // 设置音量包络
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            // 播放声音
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+        
+        // 播放和弦
+        function playChord(hue, saturation, lightness) {
+            // 基于主音生成和弦（大三和弦）
+            const baseFreq = 200 + (hue / 360) * 1000;
+            const frequencies = [
+                baseFreq,           // 根音
+                baseFreq * 1.25,   // 大三度
+                baseFreq * 1.5,    // 纯五度
+            ];
+            
+            // 为每个音创建振荡器
+            frequencies.forEach((freq, index) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+                
+                // 设置音量（每个音稍微不同）
+                const volume = (0.05 + (lightness / 100) * 0.2) * (1 - index * 0.2);
+                
+                // 连接节点
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // 设置音量包络
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.1);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.5);
+                
+                // 播放声音
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 1.5);
+            });
+        }
+        
+        // 播放环境音
+        function playAmbientTone(hue, saturation, lightness, duration) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            // 环境音使用较低频率
+            const frequency = 100 + (hue / 360) * 300;
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            // 环境音使用较低音量
+            const volume = 0.05 + (lightness / 100) * 0.1;
+            
+            // 连接节点
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // 设置音量包络
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.2);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            // 播放声音
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+        
+        // 保存当前色彩到历史记录
+        function saveColorToHistory() {
+            const color = {
+                hue: currentHue,
+                saturation: currentSaturation,
+                lightness: currentLightness,
+                timestamp: Date.now()
+            };
+            
+            colorHistory.unshift(color); // 添加到开头
+            
+            // 限制历史记录数量
+            if (colorHistory.length > 12) {
+                colorHistory.pop();
+            }
+            
+            updateHistoryDisplay();
+            
+            // 播放确认音效
+            playSingleTone(120, 80, 60, 0.3);
+        }
+        
+        // 更新历史记录显示
+        function updateHistoryDisplay() {
+            historyColors.innerHTML = '';
+            
+            colorHistory.forEach((color, index) => {
+                const colorElement = document.createElement('div');
+                colorElement.className = 'history-color';
+                colorElement.style.backgroundColor = `hsl(${color.hue}, ${color.saturation}%, ${color.lightness}%)`;
+                
+                // 点击历史颜色重新播放
+                colorElement.addEventListener('click', () => {
+                    // 更新当前色彩
+                    currentHue = color.hue;
+                    currentSaturation = color.saturation;
+                    currentLightness = color.lightness;
+                    
+                    // 更新滑块
+                    hueSlider.value = currentHue;
+                    saturationSlider.value = currentSaturation;
+                    lightnessSlider.value = currentLightness;
+                    
+                    // 更新显示
+                    hueValue.textContent = `${currentHue}°`;
+                    saturationValue.textContent = `${currentSaturation}%`;
+                    lightnessValue.textContent = `${currentLightness}%`;
+                    
+                    // 更新色盘
+                    updateColorDisk();
+                    
+                    // 播放声音
+                    playColorSound(currentHue, currentSaturation, currentLightness);
+                });
+                
+                historyColors.appendChild(colorElement);
+            });
+            
+            // 如果历史记录为空，显示提示
+            if (colorHistory.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.style.color = '#a0aec0';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.style.width = '100%';
+                emptyMsg.style.padding = '20px';
+                emptyMsg.textContent = '暂无保存的色彩，点击"保存色彩"按钮开始记录';
+                historyColors.appendChild(emptyMsg);
+            }
+        }
+        
+        // 清除历史记录
+        function clearHistory() {
+            colorHistory = [];
+            updateHistoryDisplay();
+            
+            // 播放清除音效
+            playSingleTone(0, 100, 50, 0.2);
+        }
+        
+        // 初始化事件监听
+        function initEventListeners() {
+            // 滑块事件
+            hueSlider.addEventListener('input', function() {
+                currentHue = parseInt(this.value);
+                hueValue.textContent = `${currentHue}°`;
+                updateColorDisk();
+                
+                // 实时预览声音（仅在按下时）
+                if (this.isPressed) {
+                    playColorSound(currentHue, currentSaturation, currentLightness, 0.2);
+                }
+            });
+            
+            saturationSlider.addEventListener('input', function() {
+                currentSaturation = parseInt(this.value);
+                saturationValue.textContent = `${currentSaturation}%`;
+                updateColorDisk();
+                
+                if (this.isPressed) {
+                    playColorSound(currentHue, currentSaturation, currentLightness, 0.2);
+                }
+            });
+            
+            lightnessSlider.addEventListener('input', function() {
+                currentLightness = parseInt(this.value);
+                lightnessValue.textContent = `${currentLightness}%`;
+                updateColorDisk();
+                
+                if (this.isPressed) {
+                    playColorSound(currentHue, currentSaturation, currentLightness, 0.2);
+                }
+            });
+            
+            // 标记滑块是否被按下
+            const sliders = [hueSlider, saturationSlider, lightnessSlider];
+            sliders.forEach(slider => {
+                slider.addEventListener('mousedown', () => slider.isPressed = true);
+                slider.addEventListener('mouseup', () => slider.isPressed = false);
+                slider.addEventListener('mouseleave', () => slider.isPressed = false);
+            });
+            
+            // 模式按钮事件
+            modeButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // 移除所有按钮的active类
+                    modeButtons.forEach(btn => btn.classList.remove('active'));
+                    
+                    // 为当前按钮添加active类
+                    this.classList.add('active');
+                    
+                    // 更新当前模式
+                    currentMode = this.getAttribute('data-mode');
+                    
+                    // 播放模式切换音效
+                    playSingleTone(60, 80, 60, 0.3);
+                });
+            });
+            
+            // 保存按钮事件
+            saveBtn.addEventListener('click', saveColorToHistory);
+            
+            // 清除按钮事件
+            clearBtn.addEventListener('click', clearHistory);
+            
+            // 键盘快捷键
+            document.addEventListener('keydown', (e) => {
+                // 空格键播放当前色彩声音
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    playColorSound(currentHue, currentSaturation, currentLightness);
+                }
+                
+                // S键保存色彩
+                if (e.code === 'KeyS' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    saveColorToHistory();
+                }
+            });
+        }
+        
+        // 初始化页面
+        function init() {
+            updateColorDisk();
+            initColorDisk();
+            initEventListeners();
+            updateHistoryDisplay();
+            
+            // 页面加载时播放欢迎音效
+            setTimeout(() => {
+                playChord(180, 80, 60);
+            }, 500);
+        }
+        
+        // 确保音频上下文在用户交互后恢复
+        document.addEventListener('click', function() {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }, { once: true });
+        
+        // 初始化应用
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
