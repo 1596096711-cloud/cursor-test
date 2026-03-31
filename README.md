@@ -59,6 +59,7 @@ OPENAI_API_KEY=你的密钥
 
 请查看 `DEPLOY.md`（包含 `npm.cmd run dev:lan`、防火墙放行、`/api/health` 自检等）。
 
+## 小组成员
 李伊萱 LI YIXUAN MC569245
 陈清扬 CHEN QINGYANG
 
