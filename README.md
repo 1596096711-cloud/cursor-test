@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/26381177/README.md)
+[Uploading README.md…]()
 # 排版智能分析器（Typography & Grid Detector）
 
 这是一个基于 **Next.js (App Router) + TypeScript + Tailwind** 的单页工具：上传海报/设计稿（JPG/PNG/PDF），在页面里查看网格/文字框叠加、字体/行距报告，并可导出排版模板 **SVG**。
@@ -44,6 +44,21 @@ npm.cmd run dev
 
 ## 配置云端 API（可选）
 
+### 获取 API Key 的服务/网站链接
+
+按你的实际地区与合规要求选择其一：
+
+- **OpenAI（官方）**：在 OpenAI 控制台创建 API Key  
+  - API Keys：`https://platform.openai.com/api-keys`
+- **阿里云百炼（DashScope / 通义千问，OpenAI 兼容模式）**：在阿里云百炼控制台创建 Key，并按其文档使用兼容接口  
+  - 百炼控制台：`https://bailian.console.aliyun.com/`
+  - DashScope 文档（兼容 OpenAI）：`https://help.aliyun.com/zh/dashscope/`
+- **Azure OpenAI（企业/云厂商）**：在 Azure Portal 创建资源与 Key（接口形态可能与 `/v1` 不同）  
+  - Azure Portal：`https://portal.azure.com/`
+  - Azure OpenAI 文档：`https://learn.microsoft.com/azure/ai-services/openai/`
+
+> 提示：如果你直连 `api.openai.com` 出现 403 地区限制，本项目会自动回退到“本地字库模式”。要启用云端识图，请使用你所在地区可用且合规的服务（例如上面列出的阿里云/企业云通道等）。
+
 编辑项目根目录 `.env.local`（不要提交到 Git）：
 
 ```env
@@ -58,6 +73,7 @@ OPENAI_API_KEY=你的密钥
 ## 局域网给他人使用
 
 请查看 `DEPLOY.md`（包含 `npm.cmd run dev:lan`、防火墙放行、`/api/health` 自检等）。
+
 
 ## 小组成员
 李伊萱 LI YIXUAN MC569245
