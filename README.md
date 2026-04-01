@@ -78,4 +78,5 @@ OPENAI_API_KEY=你的密钥
 ## 小组成员
 李伊萱 LI YIXUAN MC569245
 陈清扬 CHEN QINGYANG MC569302
+https://youtu.be/_47QUbdeUzw
 
