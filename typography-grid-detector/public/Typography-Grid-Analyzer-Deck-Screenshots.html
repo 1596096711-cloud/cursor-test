@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>排版智能分析器 · 带截图演示</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f3f0;
+      --surface: #ffffff;
+      --ink: #12110f;
+      --muted: #5e5a54;
+      --line: rgba(18, 17, 15, 0.08);
+      --accent: #2a4d42;
+      --accent-soft: rgba(42, 77, 66, 0.12);
+      --sans: "Instrument Sans", system-ui, sans-serif;
+      --serif: "Noto Serif SC", "Songti SC", serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+    body { overflow: hidden; }
+
+    .deck { height: 100%; position: relative; }
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: clamp(1.75rem, 4vw, 3.25rem) clamp(1.75rem, 5vw, 4rem);
+      display: none;
+      flex-direction: column;
+      justify-content: flex-start;
+      max-width: 1180px;
+      margin: 0 auto;
+      overflow-y: auto;
+      animation: enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .slide.active { display: flex; }
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .progress {
+      position: fixed; top: 0; left: 0; height: 3px; background: var(--accent);
+      transform-origin: left; z-index: 100; transition: transform 0.35s ease;
+    }
+    .slide-num {
+      position: fixed; bottom: 1.5rem; right: clamp(1.25rem, 3vw, 2.5rem);
+      font-size: 0.7rem; letter-spacing: 0.14em; color: var(--muted); font-weight: 500;
+    }
+    .hint {
+      position: fixed; bottom: 1.5rem; left: clamp(1.25rem, 3vw, 2.5rem);
+      font-size: 0.62rem; letter-spacing: 0.05em; color: var(--muted); opacity: 0.7;
+    }
+
+    .slide-h1-zh {
+      font-family: var(--serif);
+      font-size: clamp(1.65rem, 3.2vw, 2.35rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .slide-h1-en {
+      font-size: clamp(1rem, 1.85vw, 1.35rem);
+      font-weight: 500;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      letter-spacing: -0.01em;
+    }
+
+    .cols {
+      display: grid;
+      gap: 1rem 2rem;
+      margin-top: 1.25rem;
+      flex: 1;
+      min-height: 0;
+    }
+    @media (min-width: 720px) {
+      .cols-2 { grid-template-columns: 1fr 1fr; align-items: start; }
+      .cols-img-right { grid-template-columns: minmax(0, 42%) minmax(0, 58%); align-items: center; }
+      .cols-img-left { grid-template-columns: minmax(0, 58%) minmax(0, 42%); align-items: center; }
+    }
+
+    .lang-label {
+      font-size: 0.62rem; font-weight: 600; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 0.4rem;
+    }
+    .zh-list, .en-list {
+      list-style: none;
+      font-size: 0.88rem;
+      line-height: 1.62;
+    }
+    .zh-list { font-family: var(--serif); }
+    .en-list { color: var(--muted); font-size: 0.84rem; line-height: 1.58; }
+    .zh-list li, .en-list li {
+      position: relative;
+      padding-left: 0.95rem;
+      margin-bottom: 0.5rem;
+    }
+    .zh-list li::before, .en-list li::before {
+      content: "";
+      position: absolute; left: 0; top: 0.55em;
+      width: 4px; height: 4px; border-radius: 50%; background: var(--accent); opacity: 0.75;
+    }
+
+    .shot {
+      width: 100%;
+      height: auto;
+      max-height: min(52vh, 420px);
+      object-fit: contain;
+      object-position: top center;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset;
+    }
+    .shot-tall { max-height: min(58vh, 480px); }
+    .shot-hero { max-height: min(48vh, 400px); }
+    .shot-row {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 719px) {
+      .shot-row { grid-template-columns: 1fr; }
+    }
+    .shot-caption {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      line-height: 1.45;
+    }
+
+    .callouts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.75rem;
+      margin-top: 0.65rem;
+      font-size: 0.72rem;
+    }
+    .callouts span {
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 0.25rem 0.55rem;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.85rem;
+      font-size: 0.78rem;
+    }
+    .flow b {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 0.3rem 0.55rem;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+    .flow i { font-style: normal; color: var(--muted); padding: 0 0.15rem; }
+
+    .cards-5 {
+      display: grid;
+      gap: 0.65rem;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      margin-top: 0.85rem;
+    }
+    .mini-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.65rem 0.75rem;
+    }
+    .mini-card h4 {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+    }
+    .mini-card p { font-size: 0.72rem; line-height: 1.45; color: var(--muted); }
+    .mini-card p.zh { font-family: var(--serif); color: var(--ink); font-size: 0.76rem; margin-bottom: 0.25rem; }
+
+    .name-tag {
+      margin-top: auto;
+      padding-top: 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+    }
+
+    @media print {
+      @page { size: landscape; margin: 8mm; }
+      html, body { height: auto !important; overflow: visible !important; background: var(--bg) !important;
+        print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .progress, .hint, .slide-num { display: none !important; }
+      .deck { height: auto !important; }
+      .slide {
+        position: relative !important;
+        display: flex !important;
+        page-break-after: always;
+        break-after: page;
+        min-height: 168mm;
+        max-width: none;
+        padding: 5mm 7mm !important;
+        overflow: visible !important;
+        animation: none !important;
+      }
+      .slide:last-of-type { page-break-after: auto; }
+      .shot, .shot-tall, .shot-hero { max-height: 62mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <p class="hint">← → 空格 · 翻页</p>
+  <div class="slide-num" id="slideNum">01 / 12</div>
+
+  <div class="deck" id="deck">
+    <!-- 1 -->
+    <section class="slide active" data-i="0">
+      <p class="slide-h1-zh">排版智能分析器</p>
+      <p class="slide-h1-en">Typography &amp; Grid Analyzer</p>
+      <p class="zh-list" style="margin-top:0.75rem; max-width:42em">单页设计稿的智能版式辅助：网格、字体层级、行距与结构化报告。</p>
+      <p class="en-list" style="max-width:44em; margin-top:0.35rem">Intelligent layout support for single-page work—grid, type hierarchy, leading &amp; structured reporting.</p>
+      <img class="shot shot-hero" src="presentation-assets/01-upload.png" alt="上传界面 Upload interface" />
+      <p class="shot-caption">图 · 实际上传界面：大目标拖拽区、说明文案与 Preview / Analyze 动线 · Live upload UI</p>
+      <p class="name-tag" style="font-weight:500; line-height:1.6; max-width:36em">组员：陈清扬（MC569302）　李伊萱（MC569245）</p>
+    </section>
+
+    <!-- 2 -->
+    <section class="slide" data-i="1">
+      <p class="slide-h1-zh">核心概念</p>
+      <p class="slide-h1-en">Core Concepts</p>
+      <div class="cols cols-2">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li><strong>结构化阅读</strong>：把「感觉」变成可讨论、可复用的版式语言</li>
+            <li><strong>人机协同</strong>：AI 广谱识读，设计师保留判断与定稿</li>
+            <li><strong>作品优先</strong>：界面退后，用户设计稿始终是视觉焦点</li>
+          </ul>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <ul class="en-list">
+            <li><strong>Structured reading</strong>: intuition → shareable layout vocabulary</li>
+            <li><strong>Human–AI</strong>: model scales perception; designer owns judgment</li>
+            <li><strong>Artifact-first</strong>: chrome recedes; the artwork stays hero</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="slide" data-i="2">
+      <p class="slide-h1-zh">开发该工具的原因</p>
+      <p class="slide-h1-en">Why We Built This Tool</p>
+      <div class="cols cols-2">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li><strong>痛点</strong>：版式复盘常停留在口头，栏距与层级难以对齐认知</li>
+            <li><strong>教学与协作</strong>：需要统一语汇，减少主观表述的损耗</li>
+            <li><strong>核心理念</strong>：从「看设计」到「懂设计」—输出可对照、可迭代</li>
+          </ul>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <ul class="en-list">
+            <li><strong>Pain</strong>: critique stays verbal—gutters &amp; hierarchy misalign</li>
+            <li><strong>Teams &amp; teaching</strong>: need shared vocabulary beyond taste</li>
+            <li><strong>North star</strong>: from <em>seeing</em> to <em>understanding</em>—comparable outputs</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="slide" data-i="3">
+      <p class="slide-h1-zh">工具核心功能一览</p>
+      <p class="slide-h1-en">Core Features</p>
+      <div class="flow">
+        <b>上传</b><i>→</i><b>网格 · 字体 · 行距</b><i>→</i><b>结构化报告</b><i>→</i><b>本地字库 + GPT-4o Vision</b>
+      </div>
+      <div class="cols cols-img-left" style="margin-top:1rem">
+        <div>
+          <img class="shot shot-tall" src="presentation-assets/04-analysis-overlay.png" alt="分析叠加 Analysis overlay" />
+          <p class="shot-caption">图 · 网格与检测块叠加：品红参考线、绿/橙/红框与字库匹配标注 · Grid &amp; detection overlay</p>
+        </div>
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li>单页 JPG / PNG / PDF 上传</li>
+            <li>网格系统、字体层级、Leading 结构化输出</li>
+            <li>画布叠加与报告对照原稿</li>
+            <li>同步本地字体列表；可选多模态 API 识图</li>
+          </ul>
+          <p class="lang-label" style="margin-top:0.85rem">English</p>
+          <ul class="en-list">
+            <li>Single-page JPG / PNG / PDF</li>
+            <li>Grid, typography hierarchy, leading</li>
+            <li>Overlays + report locked to artwork</li>
+            <li>Local font list + optional GPT-4o Vision</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="slide" data-i="4">
+      <p class="slide-h1-zh">我的设计思维过程</p>
+      <p class="slide-h1-en">Design Thinking Process</p>
+      <div class="cards-5">
+        <div class="mini-card">
+          <h4>Empathize</h4>
+          <p class="zh">访谈：作业批改、品牌对齐中的真实摩擦</p>
+          <p>Interviews: grading &amp; alignment friction</p>
+        </div>
+        <div class="mini-card">
+          <h4>Define</h4>
+          <p class="zh">问题陈述：单页 → 可验证的结构化报告</p>
+          <p>Frame: page → verifiable report</p>
+        </div>
+        <div class="mini-card">
+          <h4>Ideate</h4>
+          <p class="zh">信息架构：上传、维度、标签、导出</p>
+          <p>IA: upload, tabs, export</p>
+        </div>
+        <div class="mini-card">
+          <h4>Prototype</h4>
+          <p class="zh">Figma 多轮 → Web 可交互原型</p>
+          <p>Figma loops → web prototype</p>
+        </div>
+        <div class="mini-card">
+          <h4>Test</h4>
+          <p class="zh">真实稿件走查；迭代文案与视觉权重</p>
+          <p>Real artifacts; refine copy &amp; weight</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="slide" data-i="5">
+      <p class="slide-h1-zh">在视觉传达流程中的位置</p>
+      <p class="slide-h1-en">How It Fits the Visual Communication Workflow</p>
+      <div class="flow" style="margin-top:1rem">
+        <b>灵感研究</b><i>→</i><b>概念发散</b><i>→</i><b>迭代优化 ★</b><i>→</i><b>交付复用</b>
+      </div>
+      <p class="shot-caption">★ 工具主要介入迭代阶段：解构版式、统一评审语言 · Tool touchpoint at refine</p>
+      <div class="cols cols-2" style="margin-top:0.75rem">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li>研究阶段建立风格锚点，工具不抢前置发散</li>
+            <li>定方向后用工具<strong>对齐网格与字体讨论</strong></li>
+            <li>报告与 SVG 支持归档与再编辑</li>
+          </ul>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <ul class="en-list">
+            <li>Research &amp; diverge stay human-led</li>
+            <li>In <strong>refine</strong>, align on grid &amp; type with shared output</li>
+            <li>Reports &amp; SVG for handoff &amp; archive</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="slide" data-i="6">
+      <p class="slide-h1-zh">关键 UI/UX 决策 ① · 上传界面</p>
+      <p class="slide-h1-en">Key UI/UX ① · Upload Surface</p>
+      <div class="cols cols-img-right">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li><strong>大面积虚线框</strong>：首要动作一目了然，降低首屏认知负荷</li>
+            <li><strong>说明文案</strong>：格式与单页限制可读即懂</li>
+            <li><strong>Analyze</strong>：沿 Preview 区右缘放置，对比清晰、目标足够大</li>
+            <li><strong>依据</strong>：零摩擦、沉浸式、<strong>Fitts’s Law</strong></li>
+          </ul>
+          <p class="lang-label" style="margin-top:0.75rem">English</p>
+          <ul class="en-list">
+            <li><strong>Large dropzone</strong>: primary action obvious; low cognitive load</li>
+            <li><strong>Copy</strong>: formats &amp; single-page rule scannable</li>
+            <li><strong>Analyze CTA</strong>: high contrast, Fitts-friendly target</li>
+            <li><strong>Why</strong>: zero friction, immersion, <strong>Fitts’s Law</strong></li>
+          </ul>
+          <div class="callouts">
+            <span>① 拖拽区 Dropzone</span>
+            <span>② 提示 Copy</span>
+            <span>③ CTA</span>
+          </div>
+        </div>
+        <div>
+          <img class="shot shot-tall" src="presentation-assets/01-upload.png" alt="上传界面" />
+          <p class="shot-caption">全幅界面截图 · Full upload screen</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="slide" data-i="7">
+      <p class="slide-h1-zh">关键 UI/UX 决策 ② · 分析与标签</p>
+      <p class="slide-h1-en">Key UI/UX ② · Analysis &amp; Tabs</p>
+      <div class="cols cols-img-right">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li><strong>顶部标签</strong>：Grid / Layout / Typography… 按任务分组，降低寻找成本</li>
+            <li><strong>激活态</strong>：白底深字 vs 灰字，层级一眼可扫</li>
+            <li><strong>Grid 卡片</strong>：白底弱边框，不压过下方作品预览</li>
+            <li><strong>等待态</strong>：轻量文案，不阻断版心</li>
+          </ul>
+          <p class="lang-label" style="margin-top:0.75rem">English</p>
+          <ul class="en-list">
+            <li><strong>Tabs</strong>: task-grouped nav—scannable, low hunt time</li>
+            <li><strong>Active state</strong>: white pill vs muted labels</li>
+            <li><strong>Card</strong>: quiet chrome; preview stays dominant</li>
+            <li><strong>Waiting</strong>: lightweight, non-blocking</li>
+          </ul>
+          <div class="callouts">
+            <span>Tab 导航</span>
+            <span>Grid 面板</span>
+            <span>Waiting state</span>
+          </div>
+        </div>
+        <div>
+          <img class="shot shot-tall" src="presentation-assets/02-grid-tab.png" alt="Grid 标签页" />
+          <p class="shot-caption">Grid 标签 + 结果卡片 + Waiting for results… · Grid tab screenshot</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section class="slide" data-i="8">
+      <p class="slide-h1-zh">关键 UI/UX 决策 ③ · 整体风格与交互</p>
+      <p class="slide-h1-en">Key UI/UX ③ · Chrome &amp; Interaction</p>
+      <div class="shot-row" style="margin-top:0.75rem">
+        <figure>
+          <img class="shot" style="max-height:220px" src="presentation-assets/03-overlay-empty.png" alt="空状态 overlay" />
+          <figcaption class="shot-caption">中性浅调 · 空状态说明 · Neutral empty state</figcaption>
+        </figure>
+        <figure>
+          <img class="shot" style="max-height:220px" src="presentation-assets/04-analysis-overlay.png" alt="叠加分析" />
+          <figcaption class="shot-caption">分析层高密度信息仅在作品区展开 · Rich overlay on artwork</figcaption>
+        </figure>
+      </div>
+      <div class="cols cols-2" style="margin-top:0.65rem">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li>浅灰蓝背景 + 白卡片：<strong>不抢用户稿件饱和度</strong></li>
+            <li>留白与圆角统一，专业感来自克制而非装饰</li>
+            <li>导出与分析等末端动作标签明确、可预期</li>
+          </ul>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <ul class="en-list">
+            <li>Cool gray UI + white panels—<strong>won’t fight the artwork</strong></li>
+            <li>Whitespace &amp; radius system—craft through restraint</li>
+            <li>End-of-flow actions explicit &amp; predictable</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="slide" data-i="9">
+      <p class="slide-h1-zh">开发流程简述</p>
+      <p class="slide-h1-en">Development Process · Design-Led</p>
+      <div class="cols cols-2">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li><strong>设计先行</strong>：Figma 完成 IA、组件与多版视觉迭代</li>
+            <li><strong>规范落地</strong>：间距、字号、圆角与状态与前端对齐</li>
+            <li><strong>并行校对</strong>：减少「差不多」的漂移</li>
+          </ul>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <ul class="en-list">
+            <li><strong>Design-first</strong>: Figma IA, components, visual passes</li>
+            <li><strong>Specs</strong>: spacing, type, radius, states in code</li>
+            <li><strong>Joint QA</strong>: design &amp; dev tighten drift</li>
+          </ul>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:1.25rem">
+        <b>Figma</b><i>→</i><b>Design tokens &amp; components</b><i>→</i><b>Next.js UI</b><i>→</i><b>API / analysis</b>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section class="slide" data-i="10">
+      <p class="slide-h1-zh">总结与价值</p>
+      <p class="slide-h1-en">Summary &amp; Value</p>
+      <div class="cols cols-2">
+        <div>
+          <p class="lang-label">中文</p>
+          <ul class="zh-list">
+            <li>工具是<strong>设计师思维的延伸</strong>：外化隐性判断</li>
+            <li><strong>价值</strong>：统一语汇、加速评审、教学与自检</li>
+            <li><strong>未来</strong>：更细字重、设计 token、协作批注与版本对比</li>
+          </ul>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <ul class="en-list">
+            <li>An <strong>extension of designer thinking</strong></li>
+            <li><strong>Value</strong>: vocabulary, faster reviews, teaching</li>
+            <li><strong>Next</strong>: weight fidelity, tokens, collaboration</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12 -->
+    <section class="slide" data-i="11">
+      <p class="slide-h1-zh">感谢</p>
+      <p class="slide-h1-en">Thank You · Q&amp;A</p>
+      <div class="cols cols-2" style="margin-top:2rem; align-items:start">
+        <div>
+          <p class="lang-label">中文</p>
+          <p class="zh-list" style="list-style:none; padding:0;">欢迎提问与交流。</p>
+          <p class="name-tag" style="margin-top:1.5rem; font-weight:500; line-height:1.65; max-width:28em">组员：陈清扬（MC569302）　李伊萱（MC569245）</p>
+        </div>
+        <div>
+          <p class="lang-label">English</p>
+          <p class="en-list" style="list-style:none; padding:0;">Questions &amp; discussion welcome.</p>
+          <p class="name-tag" style="margin-top:1.5rem; font-weight:500; line-height:1.65; max-width:28em; color:var(--muted)">Group members: Chen Qingyang (MC569302), Li Yixuan (MC569245)</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const total = slides.length;
+      let idx = 0;
+      const progress = document.getElementById("progress");
+      const slideNum = document.getElementById("slideNum");
+
+      function show(i) {
+        idx = Math.max(0, Math.min(total - 1, i));
+        slides.forEach((s, j) => s.classList.toggle("active", j === idx));
+        progress.style.transform = "scaleX(" + (idx + 1) / total + ")";
+        slideNum.textContent = String(idx + 1).padStart(2, "0") + " / " + String(total).padStart(2, "0");
+      }
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+          e.preventDefault();
+          show(idx + 1);
+        } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+          e.preventDefault();
+          show(idx - 1);
+        } else if (e.key === "Home") show(0);
+        else if (e.key === "End") show(total - 1);
+      });
+
+      show(0);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#eef2f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="120" y="110" width="1360" height="680" rx="18" fill="#ffffff" stroke="#dbe2ea" stroke-width="2"/>
+  <text x="160" y="190" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="34" fill="#0f172a" font-weight="700">
+    
+ Lb`M�	
+  </text>
+  <text x="160" y="235" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="18" fill="#475569">
+    �*�>0 public/presentation-assets/ v�bٛ SVG
+  </text>
+  <rect x="160" y="300" width="540" height="420" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="760" y="300" width="680" height="220" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="760" y="540" width="680" height="180" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="185" y="355" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="16" fill="#64748b">��
+ :</text>
+  <text x="785" y="355" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="16" fill="#64748b">�Ӝ Tabs</text>
+  <text x="785" y="595" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="16" fill="#64748b">�� + Canvas �</text>
+</svg>

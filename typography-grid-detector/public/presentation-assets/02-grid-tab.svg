@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#f4f6f8"/>
+  <rect x="120" y="110" width="1360" height="680" rx="18" fill="#ffffff" stroke="#dbe2ea" stroke-width="2"/>
+  <text x="160" y="190" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="34" fill="#0f172a" font-weight="700">
+    Q<��~u`M�	
+  </text>
+  <text x="160" y="235" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="18" fill="#475569">
+    :�pgutter��I�oU:
+  </text>
+  <rect x="160" y="290" width="1280" height="460" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <g opacity="0.55" stroke="#94a3b8">
+    <line x1="240" y1="310" x2="240" y2="730"/>
+    <line x1="380" y1="310" x2="380" y2="730"/>
+    <line x1="520" y1="310" x2="520" y2="730"/>
+    <line x1="660" y1="310" x2="660" y2="730"/>
+    <line x1="800" y1="310" x2="800" y2="730"/>
+    <line x1="940" y1="310" x2="940" y2="730"/>
+    <line x1="1080" y1="310" x2="1080" y2="730"/>
+    <line x1="1220" y1="310" x2="1220" y2="730"/>
+    <line x1="1360" y1="310" x2="1360" y2="730"/>
+  </g>
+</svg>

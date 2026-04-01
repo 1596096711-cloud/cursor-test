@@ -1,5 +1,19 @@
 # 给他人使用（其它电脑打开网站）
 
+## GitHub Pages（静态幻灯片演示 · 固定链接）
+
+GitHub Pages **不能**运行完整 Next.js（无 `/api`）。仓库根目录工作流 `.github/workflows/gh-pages-typography-deck.yml` 会把 **`typography-grid-detector/public/`** 下的演示页发布上线。
+
+- **启用**：仓库 **Settings → Pages → Source：GitHub Actions**；推送 `main` 或手动运行 **Deploy typography deck to GitHub Pages**。  
+- **链接格式**：`https://<GitHub用户名>.github.io/<仓库名>/`  
+- **示例**（仓库 `1596096711-cloud/cursor-test`）：  
+  - `https://1596096711-cloud.github.io/cursor-test/`  
+  - `https://1596096711-cloud.github.io/cursor-test/Typography-Grid-Analyzer-Deck-Screenshots.html`  
+
+完整分析功能请用 VPS / Vercel / Docker 等（见下文与其它文档）。
+
+---
+
 ## 方式一：同一局域网（最快）
 
 **一键（推荐）**：双击项目里的 **`局域网启动.bat`**（无法连接时右键「以管理员身份运行」一次，用于添加防火墙规则）。
