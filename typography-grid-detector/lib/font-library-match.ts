@@ -32,7 +32,7 @@ function levenshtein(a: string, b: string): number {
   return row[n];
 }
 
-function similarityScore(guess: string, candidate: string): number {
+export function similarityScore(guess: string, candidate: string): number {
   const g = normalizeName(guess);
   const c = normalizeName(candidate);
   if (!g || !c) return 0;
@@ -43,8 +43,8 @@ function similarityScore(guess: string, candidate: string): number {
   return 1 - d / maxLen;
 }
 
-/** 相似度达到此值才替换为库中名称，否则保留模型原输出 */
-const MIN_MATCH_SCORE = 0.38;
+/** 相似度达到此值才替换为库中名称，否则保留模型原输出（略高以减少误替） */
+const MIN_MATCH_SCORE = 0.42;
 
 export function pickBestLibraryFamily(
   modelFamily: string,
@@ -113,4 +113,52 @@ export function applyFontLibraryToFonts<T extends FontEntry>(
     const { family } = pickBestLibraryFamily(f.family, libraryNames);
     return { ...f, family };
   });
+}
+
+const TOKEN_RE = /[A-Za-z][A-Za-z0-9+.-]{1,}|[\u4e00-\u9fff]{1,4}/g;
+
+function tokenBonus(visualNote: string | undefined, candidate: string): number {
+  if (!visualNote?.trim()) return 0;
+  const vn = visualNote.toLowerCase();
+  const cn = candidate.toLowerCase();
+  let bonus = 0;
+  const tokens = visualNote.match(TOKEN_RE) ?? [];
+  for (const t of tokens) {
+    const low = t.toLowerCase();
+    if (low.length < 3) continue;
+    if (cn.includes(low) || vn.includes(candidate.toLowerCase())) bonus += 0.06;
+  }
+  return Math.min(bonus, 0.25);
+}
+
+/**
+ * 从大字库中截取与模型推测、视觉描述最相关的前 K 个族名（供二次 API 精校）。
+ */
+export function shortlistFontCandidates(
+  modelFamily: string,
+  visualNote: string | undefined,
+  libraryNames: readonly string[],
+  k: number,
+  usageHint?: string | undefined
+): string[] {
+  if (!libraryNames.length || k <= 0) return [];
+  const uniq = [...new Set(libraryNames.map((n) => n.trim()).filter(Boolean))];
+  const hint =
+    `${visualNote ?? ""} ${usageHint ?? ""}`.trim().slice(0, 280) || undefined;
+  const scored = uniq.map((name) => ({
+    name,
+    score:
+      similarityScore(modelFamily, name) + tokenBonus(hint, name)
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of scored) {
+    const key = row.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row.name);
+    if (out.length >= k) break;
+  }
+  return out;
 }

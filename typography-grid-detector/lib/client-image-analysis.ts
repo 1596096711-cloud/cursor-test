@@ -269,13 +269,67 @@ export function inferLayoutFromUploadedImage(
     }
   }
 
-  let columns = clamp(valleys.length + 1, 1, 12);
-  let gutter_px =
-    columns > 1
-      ? Math.round(clamp((nw / columns) * 0.06, 8, 96))
-      : 0;
+  const valleyColumns = clamp(valleys.length + 1, 1, 12);
 
-  const grid_system = `本机图像粗测 · 约 ${columns} 列（竖向留白谷值 + 块宽启发），gutter≈${gutter_px}px；${boxes.length} 个连通域文字块（复杂背景可能不准）`;
+  /** 用文字块几何估计栏数：排除通栏超宽块后，对 x 中心排序，大间隙视为分栏 */
+  function median(nums: number[]): number {
+    if (nums.length === 0) return 0;
+    const s = [...nums].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+  }
+
+  const colCandidates = merged.filter((r) => r.w < rw * 0.44);
+  let blockColumns = 1;
+  let blockGutterScaled = 0;
+  if (colCandidates.length >= 2) {
+    const centers = colCandidates
+      .map((r) => r.x + r.w / 2)
+      .sort((a, b) => a - b);
+    const gaps: number[] = [];
+    for (let i = 1; i < centers.length; i++) {
+      gaps.push(centers[i]! - centers[i - 1]!);
+    }
+    const medG = median(gaps);
+    const splitTh = Math.max(rw * 0.048, medG * 2.6);
+    let splits = 0;
+    const betweenColGaps: number[] = [];
+    for (const g of gaps) {
+      if (g > splitTh) {
+        splits++;
+        betweenColGaps.push(g);
+      }
+    }
+    blockColumns = clamp(splits + 1, 1, 12);
+    blockGutterScaled =
+      betweenColGaps.length > 0 ? median(betweenColGaps) : medG;
+  }
+
+  /** 块几何与竖向投影互相校验：差异大时更信任块几何（对海报/UI 更稳） */
+  let columns = blockColumns;
+  if (colCandidates.length >= 3 && Math.abs(blockColumns - valleyColumns) <= 1) {
+    columns = Math.round((blockColumns + valleyColumns) / 2);
+  } else if (colCandidates.length >= 3) {
+    columns = blockColumns;
+  } else {
+    columns = valleyColumns;
+  }
+  columns = clamp(columns, 1, 12);
+
+  let gutter_px = 0;
+  if (columns > 1) {
+    const fromBlocks =
+      blockGutterScaled > 0
+        ? Math.round(blockGutterScaled * invS)
+        : Math.round(clamp((nw / columns) * 0.055, 8, 120));
+    const fromValley = Math.round(clamp((nw / columns) * 0.06, 8, 96));
+    gutter_px = Math.round(
+      colCandidates.length >= 3 ? fromBlocks * 0.65 + fromValley * 0.35 : fromValley
+    );
+    gutter_px = clamp(gutter_px, 6, 160);
+  }
+
+  const grid_system = `本机粗测 · 主内容约 ${columns} 栏（块 x 中心间隙 + 竖向墨迹谷值交叉验证），栏间 gutter≈${gutter_px}px；检出 ${boxes.length} 个文字连通域。复杂底纹/反色/摄影背景时仅供参考，配 API 可获专业网格解读。`;
 
   return { columns, gutter_px, grid_system, boxes };
 }

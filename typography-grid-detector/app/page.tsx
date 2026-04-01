@@ -13,14 +13,19 @@ import {
 } from "../lib/layout-to-svg";
 import {
   buildFontIdentificationReport,
+  fontsBboxLikelyNormalized,
   mergeColorsIntoReport
 } from "../lib/font-identification-report";
+import { mergeUserAndBuiltinFontNames } from "../lib/font-catalog-merge";
+import { extractPaletteByPixelArea } from "../lib/extract-image-palette";
 import {
   inferLayoutFromUploadedImage,
   inferWeightFromLibraryName
 } from "../lib/client-image-analysis";
 import { librarySlotIndex } from "../lib/library-slot";
 import { sampleDominantInkColor } from "../lib/sample-bbox-colors";
+import { useI18n } from "../components/locale-provider";
+import { tpl } from "../lib/ui-dictionary";
 
 type AnalysisTabKey =
   | "grid"
@@ -97,9 +102,16 @@ interface AnalyzeResponse {
       bbox: [number, number, number, number];
     }[];
   };
+  meta_font_matching?: {
+    builtin_catalog_count: number;
+    user_library_count: number;
+    merged_pool_count: number;
+    refine_pass_applied: boolean;
+  };
 }
 
 export default function HomePage() {
+  const { t, locale, setLocale } = useI18n();
   const [activeTab, setActiveTab] = useState<AnalysisTabKey>("grid");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalDataUrl, setOriginalDataUrl] = useState<string | null>(null);
@@ -109,14 +121,37 @@ export default function HomePage() {
   const [analysisResult, setAnalysisResult] = useState<AnalyzeResponse | null>(
     null
   );
+  /** 每次成功分析递增，用于触发色板提取与避免重复计算 */
+  const [analysisStamp, setAnalysisStamp] = useState(0);
+  /** 本次结果请求时使用的界面语言（用于提示是否需重新分析） */
+  const [analysisLocale, setAnalysisLocale] = useState<"zh" | "en">("zh");
   const analysisResultRef = useRef<AnalyzeResponse | null>(null);
   analysisResultRef.current = analysisResult;
+  const paletteAppliedForStamp = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   const [fontLibrary, setFontLibrary] = useState<FontLibraryEntry[]>([]);
   const [fontUploading, setFontUploading] = useState(false);
   const [syncingSystemFonts, setSyncingSystemFonts] = useState(false);
+  const [builtinCatalogCount, setBuiltinCatalogCount] = useState<number | null>(
+    null
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/font-catalog/stats")
+      .then((r) => r.json())
+      .then((j: { builtinCount?: number }) => {
+        if (!cancelled && typeof j.builtinCount === "number") {
+          setBuiltinCatalogCount(j.builtinCount);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refreshFontLibrary = useCallback(async () => {
     try {
@@ -150,12 +185,12 @@ export default function HomePage() {
         }
         await refreshFontLibrary();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "字体上传失败");
+        alert(e instanceof Error ? e.message : t("alert.uploadFail"));
       } finally {
         setFontUploading(false);
       }
     },
-    [refreshFontLibrary]
+    [refreshFontLibrary, t]
   );
 
   const syncWindowsFonts = useCallback(async () => {
@@ -169,21 +204,25 @@ export default function HomePage() {
         );
       }
       alert(
-        `已同步 Windows 字体目录。\n系统字体条目：${data.systemFontFiles ?? 0}\n保留的本地上传：${data.keptUploads ?? 0}\n合计：${data.total ?? 0}`
+        tpl(t("sync.done"), {
+          system: data.systemFontFiles ?? 0,
+          uploads: data.keptUploads ?? 0,
+          total: data.total ?? 0
+        })
       );
       await refreshFontLibrary();
     } catch (e) {
       const msg =
         e instanceof TypeError && String(e.message).includes("fetch")
-          ? "无法连接服务器（Failed to fetch）。请确认：1）终端里已运行 npm.cmd run dev；2）浏览器地址与终端显示的端口一致（如 http://127.0.0.1:3000）；3）若多次失败，先关掉终端再重新执行 npm.cmd run dev。"
+          ? t("sync.fetchFail")
           : e instanceof Error
             ? e.message
-            : "同步系统字体失败";
+            : t("sync.fail");
       alert(msg);
     } finally {
       setSyncingSystemFonts(false);
     }
-  }, [refreshFontLibrary]);
+  }, [refreshFontLibrary, t]);
 
   const removeFont = useCallback(
     async (id: string) => {
@@ -197,10 +236,10 @@ export default function HomePage() {
         }
         await refreshFontLibrary();
       } catch (e) {
-        alert(e instanceof Error ? e.message : "删除字体失败");
+        alert(e instanceof Error ? e.message : t("alert.deleteFail"));
       }
     },
-    [refreshFontLibrary]
+    [refreshFontLibrary, t]
   );
 
   const handleFiles = useCallback((files: FileList | null) => {
@@ -462,6 +501,9 @@ export default function HomePage() {
     if (!originalDataUrl) return;
     setIsAnalyzing(true);
     try {
+      const img = imgRef.current;
+      const iw = img?.naturalWidth;
+      const ih = img?.naturalHeight;
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: {
@@ -470,6 +512,10 @@ export default function HomePage() {
         body: JSON.stringify({
           imageBase64: originalDataUrl,
           fileName,
+          outputLocale: locale,
+          ...(iw && ih
+            ? { imageWidth: iw, imageHeight: ih }
+            : {}),
           fontLibrary:
             fontLibrary.length > 0
               ? fontLibrary.map((f) => ({ family: f.familyName }))
@@ -487,25 +533,85 @@ export default function HomePage() {
       }
 
       const json = (await res.json()) as AnalyzeResponse;
+      paletteAppliedForStamp.current = 0;
+      setAnalysisLocale(locale);
+      setAnalysisStamp((s) => s + 1);
       setAnalysisResult(json);
     } catch (error) {
       console.error(error);
       const message =
-        error instanceof Error ? error.message : "调用分析接口出错，请检查服务端配置。";
+        error instanceof Error ? error.message : t("alert.analyzeErr");
       alert(message);
     } finally {
       setIsAnalyzing(false);
     }
-  }, [fileName, fontLibrary, originalDataUrl]);
+  }, [fileName, fontLibrary, locale, originalDataUrl, t]);
+
+  /** 按上传图像素面积重算色板（覆盖模型色板）；等底部 <img> 就绪 */
+  useEffect(() => {
+    if (analysisStamp === 0 || !originalDataUrl) return;
+    if (paletteAppliedForStamp.current === analysisStamp) return;
+    let cancelled = false;
+    let tries = 0;
+    const tick = () => {
+      if (cancelled) return;
+      tries++;
+      const img = imgRef.current;
+      if (!img?.naturalWidth) {
+        if (tries < 50) window.setTimeout(tick, 100);
+        return;
+      }
+      if (paletteAppliedForStamp.current === analysisStamp) return;
+      const palette = extractPaletteByPixelArea(img, 12);
+      if (palette.length === 0) return;
+      paletteAppliedForStamp.current = analysisStamp;
+      setAnalysisResult((cur) => {
+        if (!cur?.other) return cur;
+        return { ...cur, other: { ...cur.other, color_palette: palette } };
+      });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(tick));
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisStamp, originalDataUrl]);
+
+  /** 切换界面语言时重建字体表说明（版式长文需重新分析才会变语言） */
+  useEffect(() => {
+    if (analysisStamp === 0) return;
+    const p = analysisResultRef.current;
+    if (!p?.fonts?.length) return;
+    const merged = mergeUserAndBuiltinFontNames(
+      fontLibrary.map((f) => f.familyName.trim()).filter(Boolean)
+    );
+    const mode: "api" | "local_library_only" =
+      p.demo || p.fallback_reason_zh ? "local_library_only" : "api";
+    const normalizedForReport =
+      Boolean(p.demo || p.fallback_reason_zh) ||
+      fontsBboxLikelyNormalized(p.fonts);
+    const fi = buildFontIdentificationReport(p.fonts, merged, {
+      normalizedBBox: normalizedForReport,
+      mode,
+      outputLocale: locale
+    });
+    const prevColors =
+      p.font_identification?.blocks.map((b) => b.color_hex ?? b.model_ink_hex) ??
+      [];
+    const mergedFi = mergeColorsIntoReport(fi, prevColors);
+    setAnalysisResult((cur) => {
+      if (!cur?.fonts?.length) return cur;
+      return { ...cur, font_identification: mergedFi };
+    });
+  }, [locale, analysisStamp, fontLibrary]);
 
   const handleDownloadLayoutTemplate = useCallback(() => {
     if (!analysisResult) {
-      alert("请先完成分析。");
+      alert(t("alert.analyzeFirst"));
       return;
     }
     const img = imgRef.current;
     if (!img?.naturalWidth || !img.naturalHeight) {
-      alert("请等待底部「原始图像」加载完成后再下载模板。");
+      alert(t("alert.waitImage"));
       return;
     }
     const boxes =
@@ -521,24 +627,24 @@ export default function HomePage() {
     const base =
       (fileName?.replace(/\.[^.]+$/i, "") || "design").trim() || "design";
     triggerSvgDownload(svg, base);
-  }, [analysisResult, fileName]);
+  }, [analysisResult, fileName, t]);
 
   const copyFontIdentification = useCallback(() => {
     const fi = analysisResult?.font_identification;
     if (!fi?.blocks.length) return;
     const esc = (s: string) => s.replace(/\|/g, "｜").replace(/\n/g, " ");
     const lines = [
-      "字体名称 | 相似度 | 位置 | 字号 | 主色(采样) | 建议用途",
+      `${t("th.fontName")} | ${t("th.similarity")} | ${t("th.position")} | ${t("th.size")} | ${t("th.colorSampled")} | ${t("th.usage")}`,
       ...fi.blocks.map(
         (b) =>
           `${esc(b.font_name)} | ${esc(b.similarity)} | ${esc(b.position)} | ${b.size_pt}pt | ${b.color_hex ?? "—"} | ${esc(b.usage)}`
       )
     ];
     void navigator.clipboard.writeText(lines.join("\n")).then(
-      () => alert("已复制到剪贴板（制表符分隔，可粘贴到 Excel）。"),
-      () => alert("复制失败，请手动选择表格复制。")
+      () => alert(t("alert.copyOk")),
+      () => alert(t("alert.copyFail"))
     );
-  }, [analysisResult]);
+  }, [analysisResult, t]);
 
   useEffect(() => {
     if (!analysisResult || !originalDataUrl) return;
@@ -559,10 +665,12 @@ export default function HomePage() {
     const ar = analysisResult;
     if (!ar || ar.heuristic_enhanced) return;
     if (!ar.demo && !ar.fallback_reason_zh) return;
-    if (fontLibrary.length === 0) return;
 
     let cancelled = false;
-    const libNames = fontLibrary.map((f) => f.familyName.trim()).filter(Boolean);
+    const libNames =
+      fontLibrary.length > 0
+        ? fontLibrary.map((f) => f.familyName.trim()).filter(Boolean)
+        : [...new Set((ar.fonts ?? []).map((f) => f.family.trim()).filter(Boolean))];
     if (libNames.length === 0) return;
 
     const finishWithoutInference = (suffix: string) => {
@@ -624,7 +732,8 @@ export default function HomePage() {
 
       const fi = buildFontIdentificationReport(fonts, libNames, {
         normalizedBBox: false,
-        mode: "local_library_only"
+        mode: "local_library_only",
+        outputLocale: locale
       });
 
       if (cancelled) return;
@@ -647,7 +756,7 @@ export default function HomePage() {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [analysisResult, fontLibrary]);
+  }, [analysisResult, fontLibrary, locale]);
 
   useEffect(() => {
     const fi = analysisResult?.font_identification;
@@ -692,31 +801,41 @@ export default function HomePage() {
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="container py-8 space-y-6">
         <header className="space-y-2">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-            排版智能分析器
-            <span className="ml-2 text-sm md:text-base text-muted-foreground align-middle">
-              Typography & Grid Detector
-            </span>
-          </h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
+              {t("header.title")}
+              <span className="ml-2 text-sm md:text-base text-muted-foreground align-middle font-normal">
+                {locale === "zh"
+                  ? "Typography & Grid Detector"
+                  : "排版智能分析器"}
+              </span>
+            </h1>
+            <div className="flex shrink-0 gap-1 rounded-lg border border-borderMuted bg-white/80 p-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === "zh" ? "default" : "ghost"}
+                className="h-8 px-3 text-xs"
+                onClick={() => setLocale("zh")}
+              >
+                中文
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={locale === "en" ? "default" : "ghost"}
+                className="h-8 px-3 text-xs"
+                onClick={() => setLocale("en")}
+              >
+                English
+              </Button>
+            </div>
+          </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            上传单页设计稿（JPG/PNG/PDF），自动检测网格系统、字体层级与行距，生成结构化报告。
-            未配置密钥时须先<strong className="text-foreground/80"> 同步/上传本地字库 </strong>
-            ：仅用字库名称与固定示意版式对照（不读图）；配置后可调用<strong className="text-foreground/80"> GPT-4o </strong>识图。
+            {t("header.subtitle")}
           </p>
-          <p className="text-xs text-muted-foreground max-w-2xl">
-            <strong className="font-medium text-foreground/80">给他人用：</strong>
-            可双击项目里的 <code className="rounded bg-slate-200/80 px-1">局域网启动.bat</code>
-            （会尝试放行防火墙），或执行 <code className="rounded bg-slate-200/80 px-1">npm.cmd run dev:lan</code>，或{" "}
-            <code className="rounded bg-slate-200/80 px-1">npm.cmd run build</code> +{" "}
-            <code className="rounded bg-slate-200/80 px-1">npm.cmd run start:public</code>
-            ，            他人必须打开带端口的地址，例如{" "}
-            <code className="rounded bg-slate-200/80 px-1">http://你的IP:3000</code>
-            （不要省略 <code className="rounded bg-slate-200/80 px-1">:3000</code>
-            ）。防火墙放行该端口；跨设备静态资源报错时在 .env.local 设置{" "}
-            <code className="rounded bg-slate-200/80 px-1">NEXT_DEV_ALLOWED_ORIGINS=你的IP</code>
-            。可先测{" "}
-            <code className="rounded bg-slate-200/80 px-1">/api/health</code> 是否返回 JSON。详见{" "}
-            <code className="rounded bg-slate-200/80 px-1">DEPLOY.md</code>。
+          <p className="text-xs text-muted-foreground max-w-2xl whitespace-pre-wrap">
+            {t("header.deploy")}
           </p>
         </header>
 
@@ -750,15 +869,16 @@ export default function HomePage() {
                 className="flex flex-col items-center gap-2 cursor-pointer"
               >
                 <span className="text-sm font-medium">
-                  拖拽文件到此处，或点击选择
+                  {t("dropzone.cta")}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  支持 JPG / PNG / PDF（单页）
+                  {t("dropzone.formats")}
                 </span>
               </label>
               {fileName && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  当前文件：{fileName}
+                  {t("dropzone.current")}
+                  {fileName}
                 </p>
               )}
             </div>
@@ -766,14 +886,14 @@ export default function HomePage() {
             <div className="rounded-xl border border-borderMuted bg-white/80 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-medium text-muted-foreground">
-                  预览
+                  {t("preview.title")}
                 </h2>
                 <Button
                   size="sm"
                   disabled={!originalDataUrl || isAnalyzing}
                   onClick={handleAnalyze}
                 >
-                  {isAnalyzing ? "分析中..." : "开始分析"}
+                  {isAnalyzing ? t("preview.analyzing") : t("preview.analyze")}
                 </Button>
               </div>
 
@@ -782,17 +902,17 @@ export default function HomePage() {
                   <Image
                     ref={imgRef as any}
                     src={previewUrl}
-                    alt="预览图像"
+                    alt={t("preview.alt")}
                     fill
                     className="object-contain"
                   />
                 ) : originalDataUrl ? (
                   <span className="text-xs text-muted-foreground px-4 text-center">
-                    当前为 PDF 文件，顶部预览不显示；请查看底部原始图像区域。
+                    {t("preview.pdfHint")}
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    等待上传图像...
+                    {t("preview.wait")}
                   </span>
                 )}
               </div>
@@ -802,7 +922,7 @@ export default function HomePage() {
             <div className="rounded-xl border border-borderMuted bg-white/80 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-medium text-muted-foreground">
-                  我的字体库
+                  {t("fontlib.title")}
                 </h2>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -815,8 +935,8 @@ export default function HomePage() {
                     onClick={() => void syncWindowsFonts()}
                   >
                     {syncingSystemFonts
-                      ? "同步中…"
-                      : "同步 Windows 字体"}
+                      ? t("fontlib.syncing")
+                      : t("fontlib.sync")}
                   </Button>
                   <Button
                     type="button"
@@ -827,7 +947,7 @@ export default function HomePage() {
                       document.getElementById("font-input")?.click()
                     }
                   >
-                    {fontUploading ? "上传中…" : "上传字体"}
+                    {fontUploading ? t("fontlib.uploading") : t("fontlib.upload")}
                   </Button>
                 </div>
                 <input
@@ -844,19 +964,20 @@ export default function HomePage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                「同步 Windows 字体」会扫描{" "}
-                <code className="rounded bg-slate-100 px-1">%WINDIR%\Fonts</code>{" "}
-               （一般为{" "}
-                <code className="rounded bg-slate-100 px-1">
-                  C:\Windows\Fonts
-                </code>
-                ），把<strong>全部</strong> TTF/OTF/TTC 的族名加入列表（不复制文件，仅本机开发服务可读）。
-                手动上传仍保存在项目 <code className="rounded bg-slate-100 px-1">uploads/fonts</code>。
-                再次同步会<strong>替换</strong>上一次的系统字体条目，并保留你的上传项。
+                {t("fontlib.builtin.a")}{" "}
+                <strong>
+                  {builtinCatalogCount != null
+                    ? tpl(t("fontlib.builtin.count"), { n: builtinCatalogCount })
+                    : t("fontlib.builtin.lots")}
+                </strong>
+                {t("fontlib.builtin.b")}
+              </p>
+              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                {t("fontlib.winScan")}
               </p>
               {fontLibrary.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  尚未添加字体。可点击「同步 Windows 字体」或「上传字体」。
+                  {t("fontlib.empty")}
                 </p>
               ) : (
                 <ul className="max-h-80 space-y-2 overflow-auto text-sm">
@@ -876,8 +997,8 @@ export default function HomePage() {
                             }
                           >
                             {(f.source ?? "upload") === "system"
-                              ? "系统"
-                              : "上传"}
+                              ? t("fontlib.badge.system")
+                              : t("fontlib.badge.upload")}
                           </span>
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
@@ -891,7 +1012,7 @@ export default function HomePage() {
                         className="shrink-0 text-destructive"
                         onClick={() => void removeFont(f.id)}
                       >
-                        删除
+                        {t("fontlib.delete")}
                       </Button>
                     </li>
                   ))}
@@ -904,19 +1025,42 @@ export default function HomePage() {
           <div className="rounded-xl border border-borderMuted bg-white/90 backdrop-blur-sm p-4 flex flex-col">
             {analysisResult?.fallback_reason_zh && (
               <div className="mb-3 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-                <p className="font-medium">OpenAI 不可用，已自动改用本地字库</p>
+                <p className="font-medium">{t("fallback.title")}</p>
                 <p className="mt-1 text-sky-900/95 whitespace-pre-wrap">
                   {analysisResult.fallback_reason_zh}
                 </p>
               </div>
             )}
+            {analysisResult?.meta_font_matching &&
+              !analysisResult.demo &&
+              !analysisResult.fallback_reason_zh && (
+                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-950">
+                  <p className="font-medium">{t("meta.pool.title")}</p>
+                  <p className="mt-1 text-emerald-900/95">
+                    {tpl(t("meta.pool.line"), {
+                      b: analysisResult.meta_font_matching.builtin_catalog_count,
+                      u: analysisResult.meta_font_matching.user_library_count,
+                      m: analysisResult.meta_font_matching.merged_pool_count
+                    })}
+                    {analysisResult.meta_font_matching.refine_pass_applied
+                      ? t("meta.refine.yes")
+                      : t("meta.refine.no")}
+                  </p>
+                </div>
+              )}
+            {analysisResult &&
+              analysisLocale !== locale && (
+                <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+                  {t("analyze.localeMismatch")}
+                </div>
+              )}
             {analysisResult?.demo && (
               <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                <p className="font-medium">当前为本地对照模式</p>
+                <p className="font-medium">{t("demo.title")}</p>
                 <p className="mt-1 text-amber-900/90">
                   {analysisResult.fallback_reason_zh
-                    ? "上方面板已说明云端接口情况。本机会对**上传图**做墨迹连通域粗测以生成红框与列网估计；**字体名**仍从字库轮询绑定，不是从笔画识别出的字款。"
-                    : "未配置 API 时：请先同步/上传字库。分析后浏览器会对**上传图**粗测文字块位置与列网；字体名仍按字库轮询对照。若要云端识字形，请配置 OPENAI_API_KEY 或合规的 OPENAI_API_BASE。"}
+                    ? t("demo.body.fallback")
+                    : t("demo.body.noapi")}
                 </p>
               </div>
             )}
@@ -926,59 +1070,59 @@ export default function HomePage() {
               className="flex-1 flex flex-col"
             >
               <TabsList className="mb-2 flex max-w-full flex-wrap gap-1 self-start">
-                <TabsTrigger value="grid">网格系统</TabsTrigger>
-                <TabsTrigger value="layout">版式解读</TabsTrigger>
-                <TabsTrigger value="typography">字体层级</TabsTrigger>
-                <TabsTrigger value="leading">行距测量</TabsTrigger>
-                <TabsTrigger value="report">完整报告</TabsTrigger>
-                <TabsTrigger value="template">提取模板</TabsTrigger>
+                <TabsTrigger value="grid">{t("tab.grid")}</TabsTrigger>
+                <TabsTrigger value="layout">{t("tab.layout")}</TabsTrigger>
+                <TabsTrigger value="typography">{t("tab.typography")}</TabsTrigger>
+                <TabsTrigger value="leading">{t("tab.leading")}</TabsTrigger>
+                <TabsTrigger value="report">{t("tab.report")}</TabsTrigger>
+                <TabsTrigger value="template">{t("tab.template")}</TabsTrigger>
               </TabsList>
 
               <div className="flex-1 min-h-[260px]">
                 <TabsContent value="grid">
-                  <h3 className="text-sm font-medium mb-2">网格系统分析</h3>
+                  <h3 className="text-sm font-medium mb-2">{t("grid.h3")}</h3>
                   {analysisResult ? (
                     <div className="space-y-2 text-sm">
                       <div className="rounded-md border border-borderMuted p-3 bg-white">
                         <p>
-                          <span className="font-medium">网格类型：</span>
+                          <span className="font-medium">{t("grid.type")}</span>
                           {analysisResult.grid_system}
                         </p>
                         <p>
-                          <span className="font-medium">列数：</span>
+                          <span className="font-medium">{t("grid.columns")}</span>
                           {analysisResult.columns}
                         </p>
                         <p>
-                          <span className="font-medium">列间距：</span>
+                          <span className="font-medium">{t("grid.gutter")}</span>
                           {analysisResult.gutter_px}px
                         </p>
                         {analysisResult.layout_analysis?.type_tags?.length ? (
                           <p className="mt-2 text-xs text-muted-foreground">
                             <span className="font-medium text-foreground">
-                              类型标签：
+                              {t("grid.tags")}
                             </span>
                             {analysisResult.layout_analysis.type_tags.join(" · ")}
                           </p>
                         ) : null}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        完整文字解读见「版式解读」标签。
+                        {t("grid.hint")}
                       </p>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">等待分析结果...</p>
+                    <p className="text-xs text-muted-foreground">{t("wait.result")}</p>
                   )}
                 </TabsContent>
 
                 <TabsContent value="layout">
                   <h3 className="text-sm font-medium mb-2">
-                    版式与网格解读（文字结果）
+                    {t("layout.h3")}
                   </h3>
                   {analysisResult?.layout_analysis ? (
                     <div className="max-h-[28rem] space-y-3 overflow-y-auto text-sm">
                       <div className="rounded-md border border-borderMuted bg-white p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          网格系统判定
+                          {t("layout.sec.overview")}
                         </p>
                         <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                           {analysisResult.layout_analysis.overview_zh}
@@ -986,7 +1130,7 @@ export default function HomePage() {
                       </div>
                       <div className="rounded-md border border-borderMuted bg-white p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          网格结构细节
+                          {t("layout.sec.structure")}
                         </p>
                         <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                           {analysisResult.layout_analysis.structure_zh}
@@ -994,7 +1138,7 @@ export default function HomePage() {
                       </div>
                       <div className="rounded-md border border-borderMuted bg-white p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          比例与视觉焦点
+                          {t("layout.sec.composition")}
                         </p>
                         <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                           {analysisResult.layout_analysis.composition_focal_zh}
@@ -1002,7 +1146,7 @@ export default function HomePage() {
                       </div>
                       <div className="rounded-md border border-borderMuted bg-white p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          设计意图与建议
+                          {t("layout.sec.intent")}
                         </p>
                         <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                           {analysisResult.layout_analysis.intent_critique_zh}
@@ -1010,7 +1154,7 @@ export default function HomePage() {
                       </div>
                       <div className="rounded-md border border-borderMuted bg-white p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          具体位置描述
+                          {t("layout.sec.spatial")}
                         </p>
                         <p className="mt-1 whitespace-pre-wrap leading-relaxed">
                           {analysisResult.layout_analysis.spatial_labels_zh}
@@ -1018,7 +1162,7 @@ export default function HomePage() {
                       </div>
                       <div className="rounded-md border border-borderMuted bg-slate-950 p-3 text-slate-100">
                         <p className="text-xs font-semibold text-slate-400">
-                          文字示意图
+                          {t("layout.sec.ascii")}
                         </p>
                         <pre className="mt-2 overflow-x-auto font-mono text-xs leading-tight">
                           {analysisResult.layout_analysis.ascii_diagram}
@@ -1027,7 +1171,7 @@ export default function HomePage() {
                       {analysisResult.layout_analysis.summary_bullets?.length ? (
                         <div className="rounded-md border border-borderMuted bg-white p-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            要点列表
+                            {t("layout.sec.bullets")}
                           </p>
                           <ul className="mt-2 list-disc space-y-1 pl-5">
                             {analysisResult.layout_analysis.summary_bullets.map(
@@ -1041,16 +1185,15 @@ export default function HomePage() {
                     </div>
                   ) : analysisResult ? (
                     <p className="text-xs text-muted-foreground">
-                      本次结果未包含版式解读字段，请重新运行分析（需配置 API Key
-                      且模型完整返回 JSON）。
+                      {t("layout.missing")}
                     </p>
                   ) : (
-                    <p className="text-xs text-muted-foreground">等待分析结果...</p>
+                    <p className="text-xs text-muted-foreground">{t("wait.result")}</p>
                   )}
                 </TabsContent>
 
                 <TabsContent value="typography">
-                  <h3 className="text-sm font-medium mb-2">字体识别与层级</h3>
+                  <h3 className="text-sm font-medium mb-2">{t("typography.h3")}</h3>
                   {analysisResult ? (
                     <div className="space-y-3 max-h-[min(70vh,520px)] overflow-auto pr-1">
                       {analysisResult.font_identification ? (
@@ -1059,12 +1202,7 @@ export default function HomePage() {
                             {analysisResult.font_identification.disclaimer_zh}
                           </p>
                           <p className="text-[11px] text-muted-foreground">
-                            标准列对应需求：
-                            <strong className="font-medium text-foreground">字体名称</strong> |{" "}
-                            <strong className="font-medium text-foreground">相似度</strong> |{" "}
-                            <strong className="font-medium text-foreground">位置</strong> |{" "}
-                            <strong className="font-medium text-foreground">建议用途</strong>
-                            ；另附字号、主色（采样优先，次为模型 ink）。
+                            {t("typography.legend")}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -1073,7 +1211,7 @@ export default function HomePage() {
                               variant="outline"
                               onClick={copyFontIdentification}
                             >
-                              复制结构化报告
+                              {t("typography.copy")}
                             </Button>
                           </div>
                           <div className="overflow-x-auto rounded-md border border-borderMuted">
@@ -1081,25 +1219,25 @@ export default function HomePage() {
                               <thead className="bg-slate-100/90 sticky top-0 z-[1]">
                                 <tr>
                                   <th className="p-2 font-medium whitespace-nowrap">
-                                    #
+                                    {t("th.hash")}
                                   </th>
                                   <th className="p-2 font-medium whitespace-nowrap">
-                                    字体名称
+                                    {t("th.fontName")}
                                   </th>
                                   <th className="p-2 font-medium min-w-[140px]">
-                                    相似度（库匹配+视觉）
+                                    {t("th.similarity")}
                                   </th>
                                   <th className="p-2 font-medium min-w-[120px]">
-                                    位置
+                                    {t("th.position")}
                                   </th>
                                   <th className="p-2 font-medium whitespace-nowrap">
-                                    字号
+                                    {t("th.size")}
                                   </th>
                                   <th className="p-2 font-medium whitespace-nowrap">
-                                    主色
+                                    {t("th.color")}
                                   </th>
                                   <th className="p-2 font-medium min-w-[100px]">
-                                    建议用途
+                                    {t("th.usage")}
                                   </th>
                                 </tr>
                               </thead>
@@ -1143,13 +1281,13 @@ export default function HomePage() {
                                             {b.model_ink_hex &&
                                             b.model_ink_hex !== b.color_hex ? (
                                               <p className="text-[10px] text-muted-foreground">
-                                                模型参考 {b.model_ink_hex}
+                                                {t("typography.modelInk")} {b.model_ink_hex}
                                               </p>
                                             ) : null}
                                           </div>
                                         ) : (
                                           <span className="text-muted-foreground">
-                                            采样中…
+                                            {t("typography.sampling")}
                                           </span>
                                         )}
                                       </td>
@@ -1163,7 +1301,7 @@ export default function HomePage() {
                         </>
                       ) : null}
                       <p className="text-xs font-medium text-muted-foreground">
-                        原始条目（family / bbox）
+                        {t("typography.raw")}
                       </p>
                       <div className="space-y-2">
                         {analysisResult.fonts.map((font, idx) => (
@@ -1172,9 +1310,14 @@ export default function HomePage() {
                             className="rounded-md border border-borderMuted p-3 bg-white text-sm"
                           >
                             <p className="font-medium">{font.usage}</p>
-                            <p>字体：{font.family}</p>
                             <p>
-                              字号：{font.size_pt}pt · 字重：{font.weight}
+                              {t("typography.familyLabel")}
+                              {font.family}
+                            </p>
+                            <p>
+                              {t("typography.sizeLabel")}
+                              {font.size_pt}pt · {t("typography.weightLabel")}
+                              {font.weight}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               bbox: [{font.bbox.join(", ")}]
@@ -1184,39 +1327,40 @@ export default function HomePage() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">等待分析结果...</p>
+                    <p className="text-xs text-muted-foreground">{t("wait.result")}</p>
                   )}
                 </TabsContent>
 
                 <TabsContent value="leading">
-                  <h3 className="text-sm font-medium mb-2">行距测量</h3>
+                  <h3 className="text-sm font-medium mb-2">{t("leading.h3")}</h3>
                   {analysisResult ? (
                     <div className="rounded-md border border-borderMuted p-3 bg-white text-sm space-y-1">
                       <p>
-                        <span className="font-medium">行距倍率：</span>
+                        <span className="font-medium">{t("leading.em")}</span>
                         {analysisResult.line_spacing.em}em
                       </p>
                       <p>
-                        <span className="font-medium">行距（pt）：</span>
+                        <span className="font-medium">{t("leading.pt")}</span>
                         {analysisResult.line_spacing.pt}pt
                       </p>
                       <p>
-                        <span className="font-medium">是否贴合基线网格：</span>
-                        {analysisResult.line_spacing.baseline_grid === "yes"
-                          ? "是"
-                          : "否"}
+                        <span className="font-medium">{t("leading.baseline")}</span>
+                        {/^(yes|是|true|1)$/i.test(
+                          String(analysisResult.line_spacing.baseline_grid).trim()
+                        )
+                          ? t("leading.yes")
+                          : t("leading.no")}
                       </p>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">等待分析结果...</p>
+                    <p className="text-xs text-muted-foreground">{t("wait.result")}</p>
                   )}
                 </TabsContent>
 
                 <TabsContent value="template">
-                  <h3 className="text-sm font-medium mb-2">提取排版模板（SVG）</h3>
+                  <h3 className="text-sm font-medium mb-2">{t("template.h3")}</h3>
                   <p className="text-xs text-muted-foreground mb-3">
-                    根据当前分析结果，生成与源图同尺寸的矢量模板：列参考线、（若模型标注三分法）三分辅助线、基线网格示意、文字块占位框与边缘对齐参考线。可在
-                    Illustrator / Figma（导入 SVG）中继续编辑。
+                    {t("template.desc")}
                   </p>
                   {analysisResult ? (
                     <div className="space-y-3">
@@ -1225,44 +1369,47 @@ export default function HomePage() {
                         onClick={handleDownloadLayoutTemplate}
                         className="w-full sm:w-auto"
                       >
-                        下载 SVG 模板
+                        {t("template.download")}
                       </Button>
                       <div className="rounded-md border border-borderMuted bg-white p-3 text-xs text-muted-foreground space-y-1">
                         <p>
                           <span className="font-medium text-foreground">
-                            画布尺寸：
+                            {t("template.meta.canvas")}
                           </span>
-                          与底部原始图像的 natural 尺寸一致（当前需已加载出图像）。
+                          {t("template.meta.canvasVal")}
                         </p>
                         <p>
                           <span className="font-medium text-foreground">
-                            文字框：
+                            {t("template.meta.box")}
                           </span>
-                          与叠加层相同逻辑（坐标校正 + 字形外沿收紧）。
+                          {t("template.meta.boxVal")}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      完成「开始分析」后，可在此下载模板。
+                      {t("template.afterAnalyze")}
                     </p>
                   )}
                 </TabsContent>
 
                 <TabsContent value="report">
-                  <h3 className="text-sm font-medium mb-2">完整报告</h3>
+                  <h3 className="text-sm font-medium mb-2">{t("report.h3")}</h3>
                   {analysisResult ? (
                     <div className="rounded-md border border-borderMuted p-3 bg-white text-sm space-y-2">
                       <p>
-                        <span className="font-medium">对齐方式：</span>
+                        <span className="font-medium">{t("report.align")}</span>
                         {analysisResult.other.alignment}
                       </p>
                       <p>
-                        <span className="font-medium">层级评分：</span>
+                        <span className="font-medium">{t("report.score")}</span>
                         {analysisResult.other.hierarchy_score}
                       </p>
                       <div>
-                        <p className="font-medium">色板：</p>
+                        <p className="font-medium">{t("report.palette")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {t("report.paletteNote")}
+                        </p>
                         <div className="mt-1 flex flex-wrap gap-2">
                           {analysisResult.other.color_palette.map((c) => (
                             <div
@@ -1278,7 +1425,7 @@ export default function HomePage() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">等待分析结果...</p>
+                    <p className="text-xs text-muted-foreground">{t("wait.result")}</p>
                   )}
                 </TabsContent>
               </div>
@@ -1289,12 +1436,10 @@ export default function HomePage() {
         {/* 底部：原始图像 + Canvas 叠加 */}
         <section className="mt-2 rounded-xl border border-borderMuted bg-white/90 p-4 space-y-3">
           <h2 className="text-sm font-medium text-muted-foreground">
-            原始图像 &amp; 网格/文字框叠加
+            {t("bottom.title")}
           </h2>
           <p className="text-xs text-muted-foreground">
-            叠加层按<strong>当前显示尺寸</strong>与图片对齐，并自动校正模型坐标（归一化 0~1
-            或整体偏小/偏大）。绿/橙线为收紧后 bbox 的边聚类；红框为 ROI
-            内亮度分位数阈值得到的墨色外沿。复杂底纹时仍可能有偏差。
+            {t("bottom.hint")}
           </p>
           <div className="relative w-full overflow-auto border rounded-lg border-borderMuted bg-slate-50">
             <div className="relative inline-block">
@@ -1306,7 +1451,7 @@ export default function HomePage() {
                   <img
                     ref={imgRef}
                     src={originalDataUrl}
-                    alt="原始图像"
+                    alt={t("bottom.alt")}
                     className="block max-h-[480px] w-auto"
                     onLoad={() => {
                       requestAnimationFrame(() =>
@@ -1325,7 +1470,7 @@ export default function HomePage() {
                 </>
               ) : (
                 <div className="flex items-center justify-center h-40 px-4 text-xs text-muted-foreground">
-                  上传图像后，将在此显示原始图像和检测到的网格/文字框。
+                  {t("bottom.empty")}
                 </div>
               )}
             </div>

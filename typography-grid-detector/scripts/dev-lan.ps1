@@ -1,6 +1,11 @@
 # 局域网开发：尝试放行防火墙并启动 Next（建议在「以管理员身份运行」的 PowerShell 中执行）
 $ErrorActionPreference = "Continue"
-$Port = if ($env:PORT) { [int]$env:PORT } else { 3000 }
+# 新安装的 Node 若当前终端尚未刷新 PATH，仍能找到 npm
+$nodeDir = "C:\Program Files\nodejs"
+if (Test-Path $nodeDir) {
+  $env:Path = "$nodeDir;$env:Path"
+}
+$Port = if ($env:PORT) { [int]$env:PORT } else { 3010 }
 $Root = Split-Path -Parent $PSScriptRoot
 
 Write-Host "=== 排版分析器 · 局域网访问 ===" -ForegroundColor Cyan
