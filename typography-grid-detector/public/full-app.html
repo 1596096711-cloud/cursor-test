@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>排版智能分析器 · 完整网站说明</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f3f0;
+      --ink: #12110f;
+      --muted: #5e5a54;
+      --accent: #2a4d42;
+      --card: #fff;
+      --line: rgba(18, 17, 15, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "DM Sans", system-ui, sans-serif;
+      padding: clamp(1.5rem, 4vw, 3rem);
+      line-height: 1.65;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 {
+      font-family: "Noto Serif SC", serif;
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.75rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+    }
+    .card h2 {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin-bottom: 0.65rem;
+    }
+    .card p, .card li { font-size: 0.92rem; color: var(--ink); }
+    .card ul { margin: 0.5rem 0 0 1.1rem; }
+    .card li { margin: 0.35rem 0; }
+    a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(42, 77, 66, 0.35);
+    }
+    a:hover { border-bottom-color: var(--accent); }
+    .links { display: flex; flex-wrap: wrap; gap: 0.65rem 1.1rem; margin-top: 0.75rem; }
+    .pill {
+      display: inline-block;
+      padding: 0.35rem 0.75rem;
+      background: rgba(42, 77, 66, 0.08);
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: none;
+    }
+    footer { margin-top: 2rem; font-size: 0.78rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>关于「完整网站」与 GitHub Pages</h1>
+    <p class="sub">排版智能分析器（Next.js）· 线上说明页</p>
+
+    <div class="card">
+      <h2>为什么 Pages 上打不开完整功能？</h2>
+      <p>
+        <strong>GitHub Pages 只提供静态文件托管</strong>，不能运行 Node.js，也没有本项目需要的
+        <code>/api/analyze</code>、字库上传等后端逻辑。因此<strong>不存在</strong>一个「在 GitHub Pages 上即可上传图片并完成全流程分析」的链接。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>在 GitHub Pages 上能看什么？</h2>
+      <p>静态幻灯片演示（产品介绍与界面说明，无需服务器）：</p>
+      <div class="links">
+        <a class="pill" href="./">幻灯片首页</a>
+        <a class="pill" href="./Typography-Grid-Analyzer-Deck-Screenshots.html">同页（带文件名）</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>体验完整网站的方式</h2>
+      <ul>
+        <li>在本机克隆仓库后进入 <code>typography-grid-detector</code>，执行 <code>npm install</code> 与 <code>npm run dev</code>（详见仓库 README）。</li>
+        <li>或使用 <strong>Vercel / 云服务器 / Docker</strong> 部署整套 Next 应用（见仓库内 <code>DEPLOY.md</code>）。部署成功后，你会得到自己的 <code>https://…</code> 链接，那才是「完整网站」的演示地址。</li>
+      </ul>
+      <div class="links">
+        <a href="https://github.com/1596096711-cloud/cursor-test">GitHub 仓库</a>
+        <a href="https://github.com/1596096711-cloud/cursor-test/tree/main/typography-grid-detector">完整工程目录</a>
+        <a href="https://vercel.com/new">Vercel 新建项目</a>
+      </div>
+    </div>
+
+    <footer>
+      本页与幻灯片均由仓库 Actions 发布到 GitHub Pages；路径：<code>/full-app.html</code>
+    </footer>
+  </div>
+</body>
+</html>

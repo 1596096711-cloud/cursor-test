@@ -10,7 +10,8 @@
 |------|------|
 | **GitHub 仓库** | [https://github.com/1596096711-cloud/cursor-test](https://github.com/1596096711-cloud/cursor-test) |
 | **完整工程（本目录在仓库中的位置）** | [https://github.com/1596096711-cloud/cursor-test/tree/main/typography-grid-detector](https://github.com/1596096711-cloud/cursor-test/tree/main/typography-grid-detector) |
-| **在线演示稿（GitHub Pages · 静态幻灯片）** | [https://1596096711-cloud.github.io/cursor-test/](https://1596096711-cloud.github.io/cursor-test/) · [带文件名入口](https://1596096711-cloud.github.io/cursor-test/Typography-Grid-Analyzer-Deck-Screenshots.html) |
+| **在线演示稿（GitHub Pages · 静态幻灯片）** | [首页](https://1596096711-cloud.github.io/cursor-test/) · [带文件名入口](https://1596096711-cloud.github.io/cursor-test/Typography-Grid-Analyzer-Deck-Screenshots.html) |
+| **GitHub Pages · 完整网站说明**（Pages 无法托管 Next 全站时的指引） | [https://1596096711-cloud.github.io/cursor-test/full-app.html](https://1596096711-cloud.github.io/cursor-test/full-app.html) |
 | **演示视频网站（YouTube）** | [https://youtu.be/_47QUbdeUzw](https://youtu.be/_47QUbdeUzw) |
 | **Panel UI · 插件面板**（侧栏 / 扩展管理，适用于 VS Code 与 Cursor） | [用户界面与布局](https://code.visualstudio.com/docs/getstarted/userinterface) · [扩展（插件）市场与安装](https://code.visualstudio.com/docs/editor/extension-marketplace) · [Cursor 文档总览](https://cursor.com/docs) |
 

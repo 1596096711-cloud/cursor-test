@@ -1,5 +1,5 @@
-# 将「排版智能分析器」静态演示页（HTML + SVG）部署到 GitHub Pages。
-# 完整 Next.js 站点无法在 Pages 上运行；本工作流仅发布 public 下的幻灯片页。
+# 将 typography-grid-detector/public 下的静态资源发布到 GitHub Pages。
+# 完整 Next.js（含 API）无法在 Pages 上运行；站点内含幻灯片 +「完整网站说明」页 full-app.html。
 name: Deploy typography deck to GitHub Pages
 
 on:
@@ -33,9 +33,8 @@ jobs:
           mkdir -p _site
           SRC="typography-grid-detector/public"
           test -f "$SRC/Typography-Grid-Analyzer-Deck-Screenshots.html" || { echo "Missing deck HTML at $SRC"; exit 1; }
+          cp -r "$SRC"/* _site/
           cp "$SRC/Typography-Grid-Analyzer-Deck-Screenshots.html" _site/index.html
-          cp "$SRC/Typography-Grid-Analyzer-Deck-Screenshots.html" _site/Typography-Grid-Analyzer-Deck-Screenshots.html
-          cp -r "$SRC/presentation-assets" _site/
 
       - uses: actions/configure-pages@v4
 
